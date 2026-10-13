@@ -60,7 +60,7 @@ Note that Chat AI's web interface provided in this repository can be set up on a
 
 ## Getting Started
 
-The web interface consists of two Docker containers, `front` and `back`. The `front` service is a ReactJS app served by ViteJS and runs entirely on the client's browser. The `back` service is simply a wrapper for message requests which gives the developer more control over the requests and prevents CORS errors on the user's browser.  
+The web interface consists of two Docker containers, `front` and `back`. The `front` service is a ReactJS app served by ViteJS and runs entirely on the client's browser. The `back` service is simply a wrapper for message requests which gives the developer more control over the requests and prevents CORS errors on the user's browser. A third container, `parser`, is the Python report pipeline of the radiology module; `back` forwards `/radiology/report` to it. It reads `apiEndpoint` and `apiKey` from `back.json` and listens on `localhost:8082`.
 
 Make sure you have docker installed and docker compose.
 
@@ -74,13 +74,16 @@ To build the images, run:
 ```bash
 docker compose build front
 docker compose build back
+docker compose build parser
 ```
 
-To start either of the two components, run:
+To start any of the components, run:
 ```bash
 docker compose up front -d
 docker compose up back -d
+docker compose up parser -d
 ```
+`docker compose up -d` starts all three together.
 
 You should then be able to access the web interface via the path and port number specified in the config file.
 
@@ -89,6 +92,7 @@ To apply any changes in the configuration and/or source code, run:
 ```bash
 docker compose restart front
 docker compose restart back
+docker compose restart parser
 ```
 
 Note that in some cases rebuilding the docker image might be necessary.
@@ -113,6 +117,8 @@ The `back` service listens to requests from `front` and interacts with an OpenAI
 - `apiEndpoint`: Endpoint of your API provider. If you have a Chat AI API key, set this to `https://chat-ai.academiccloud.de/v1`
 - `apiKey`: Your valid API key
 - `serviceName`: (Optional) A custom service name to be sent as a header in API requests to your provider. Will not be visible in the interface
+- `userFilter`, `adminUsers`: (Optional) Restrict access to certain organisations or users. These rules read the identity headers set by an SSO proxy, so they only work behind one; see [deploy/README.md](deploy/README.md)
+- `radiologyServiceUrl`: (Optional) URL of the report pipeline service used by the radiology module (`modules.radiology` in `front.json`), e.g. `http://localhost:8082`. Reports are returned in one piece after up to several minutes, so a reverse proxy in front of `back` needs a long timeout for `/radiology/report`
 
 If you wish to avoid using different ports for the `front` and `back` services, you must set up a reverse proxy or virtual host to route paths such as `/models` and `/backend` to the backend service listening on its own distinguished port. This can be done with popular server software such as Apache or Nginx.
 
@@ -137,6 +143,15 @@ cd front
 npm i
 # then run with
 npm run dev
+```
+
+For the radiology module, also run the report pipeline (Python; the Docker image uses 3.12):
+```bash
+cd parser
+# install dependencies
+pip install -r requirements.txt
+# then run with
+uvicorn app:app --port 8082
 ```
 
 [See CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute to this project.

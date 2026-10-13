@@ -1,6 +1,7 @@
 import Tooltip from "../Others/Tooltip";
 import { Trans, useTranslation } from "react-i18next";
 import { abortRequest } from "../../apis/chatCompletions";
+import { abortRadiologyReport } from "../../apis/generateRadiologyReport";
 import { useToast } from "../../hooks/useToast";
 import { StopFilled } from "@carbon/icons-react";
 
@@ -18,6 +19,7 @@ export default function AbortButton({
     // Handle cancellation of ongoing request
     const handleAbort = () => {
         abortRequest(notifyError);
+        abortRadiologyReport();
     };
 
     return loading && (

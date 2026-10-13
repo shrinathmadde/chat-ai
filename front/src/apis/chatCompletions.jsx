@@ -1,4 +1,4 @@
-import getModelDefaults from "../config/getModelDefaults";
+import getReasoningParams from "../config/getReasoningParams";
 import { createBackendClient } from "./openaiClient";
 
 // Controller for handling API request cancellation
@@ -14,7 +14,6 @@ async function* chatCompletions (
       ? conversation.settings.model
       : conversation.settings.model?.id; // TODO fall back to defaultModel
 
-    const modelDefaults = getModelDefaults(model);
     // Initialize params
     const params = {
       model: model,
@@ -23,41 +22,9 @@ async function* chatCompletions (
       top_p: conversation.settings.top_p,
       stream: stream,
       stream_options: {include_usage: true },
+      // Handle reasoning settings
+      ...getReasoningParams(model, conversation.settings),
     };
-
-    // Handle reasoning settings
-    try {
-      if (modelDefaults?.reasoning_effort !== undefined && modelDefaults?.reasoning_effort !== null) {
-        let reasoning_effort = modelDefaults.reasoning_effort;
-        if (conversation.settings?.reasoning_effort !== undefined && conversation.settings?.reasoning_effort !== null) {
-          reasoning_effort = Math.min(conversation.settings.reasoning_effort, modelDefaults.reasoning_options.length - 1)
-        }
-        if (model?.toLowerCase().startsWith("claude")) {
-          // External Claude models
-          params.reasoning_effort = modelDefaults.reasoning_options[reasoning_effort];
-        }
-        else if (model?.toLowerCase().startsWith("openai") && !(model?.toLowerCase().startsWith("openai-gpt-oss"))) {
-          // External OpenAI models
-          params.reasoning_effort = modelDefaults.reasoning_options[reasoning_effort];
-        }
-        if (model?.toLowerCase().includes("mistral")) {
-          // Internal models that don't use enable_thinking separately
-          params.reasoning_effort = modelDefaults.reasoning_options[reasoning_effort];
-        }
-        else {
-          if (reasoning_effort == 0) {
-            params.chat_template_kwargs = modelDefaults.reasoning_options[0] == "none" ?
-              {enable_thinking: false} : {reasoning_effort: modelDefaults.reasoning_options[0]};
-          } else if (modelDefaults.reasoning_options[reasoning_effort] == "on") {
-            params.chat_template_kwargs = {enable_thinking: true};
-          } else {
-            params.chat_template_kwargs = {enable_thinking: true, reasoning_effort: modelDefaults.reasoning_options[reasoning_effort]};
-          }
-        }
-      }
-    }  catch {
-      console.warn("Could not find reasoning setting")
-    }
 
     // Handle tools
     if (conversation.settings?.enable_tools) {

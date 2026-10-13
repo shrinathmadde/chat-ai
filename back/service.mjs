@@ -21,6 +21,13 @@ let port = 8081;
 let apiEndpoint = "https://chat-ai.academiccloud.de/v1";
 let apiKey = "";
 let serviceName = "Chat AI Dev";
+// Optional access rules on the OIDC claims the SSO proxy adds as headers:
+// { org: rule, organization: rule, user: rule }, each rule being
+// { whitelist: [], blacklist: [] }. Every configured rule must pass.
+let userFilter = {};
+// Users (uid or email) that skip all rules
+let adminUsers = [];
+let radiologyServiceUrl = "";
 
 // Load configuration
 try {
@@ -36,6 +43,11 @@ try {
   apiEndpoint = config.apiEndpoint;
   apiKey = config.apiKey;
   serviceName = config.serviceName;
+  if (config.userFilter && typeof config.userFilter === "object") {
+    userFilter = config.userFilter;
+  }
+  adminUsers = normalizeList(config.adminUsers);
+  radiologyServiceUrl = config.radiologyServiceUrl || "";
 } catch (error) {
   console.error("Failed to read back.json. Using default values.", error);
 }
@@ -65,6 +77,55 @@ app.use((err, req, res, next) => {
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cors());
+
+// User identity from the OIDC headers set by the SSO proxy; empty without one
+function getUserFromHeaders(req) {
+  return {
+    email: req.headers["oidc_claim_email"] || "",
+    firstname: req.headers["oidc_claim_given_name"] || "",
+    lastname: req.headers["oidc_claim_family_name"] || "",
+    org: req.headers["oidc_claim_o"] || "",
+    organization: req.headers["oidc_claim_ou"] || "",
+    username: req.headers["oidc_claim_uid"] || "",
+  };
+}
+
+function normalizeList(list) {
+  return Array.isArray(list)
+    ? list.map((v) => String(v).trim().toLowerCase()).filter(Boolean)
+    : [];
+}
+
+// Claims with several values may arrive comma or semicolon separated
+function splitClaim(value) {
+  return normalizeList(String(value).split(/[,;]/));
+}
+
+// A rule fails if any value is blacklisted, or if it has a whitelist and no
+// value is on it. Requests without OIDC headers therefore fail any whitelist.
+function passesRule(values, rule) {
+  if (!rule) return true;
+  const whitelist = normalizeList(rule.whitelist);
+  const blacklist = normalizeList(rule.blacklist);
+  if (values.some((v) => blacklist.includes(v))) return false;
+  return whitelist.length === 0 || values.some((v) => whitelist.includes(v));
+}
+
+function isAllowed(user) {
+  const ids = normalizeList([user.username, user.email]);
+  if (ids.some((id) => adminUsers.includes(id))) return true;
+  return (
+    passesRule(splitClaim(user.org), userFilter.org) &&
+    passesRule(splitClaim(user.organization), userFilter.organization) &&
+    passesRule(ids, userFilter.user)
+  );
+}
+
+// Reject users the access rules don't allow, before any route runs
+app.use((req, res, next) => {
+  if (isAllowed(getUserFromHeaders(req))) return next();
+  return res.status(403).json({ error: "Access denied." });
+});
 
 // Function to process file with docling
 async function processFile(file, inference_id) {
@@ -152,9 +213,11 @@ app.get("/models", async (req, res) => {
   }
 });
 
-// Get placeholder user data
+// Get user data from the OIDC headers, or placeholder data without SSO
 app.get("/user", async (req, res) => {
   try {
+    const user = getUserFromHeaders(req);
+    if (user.username) return res.status(200).json(user);
     res.status(200).json({
       email: "user@example.com",
       firstname: "Sample",
@@ -202,6 +265,91 @@ app.post("/audio/speech", async (req, res) => {
   } catch (error) {
     console.error("Error in speech generation endpoint:", error);
     res.status(500).json({ error: "Failed to generate speech." });
+  }
+});
+
+// Speech-to-text endpoint: forwards an uploaded recording and returns { text }.
+// Recordings are dictations with patient data, so neither the audio nor the
+// transcript is logged.
+app.post("/audio/transcriptions", async (req, res) => {
+  if (!req.files || !req.files.file) {
+    return res.status(422).json({ error: "No audio file provided" });
+  }
+  try {
+    const url = apiEndpoint + "/audio/transcriptions";
+    const inference_id = req.headers["inference-id"];
+    const file = req.files.file;
+    const formData = new FormData();
+    formData.append("file", file.data, {
+      filename: file.name,
+      contentType: file.mimetype,
+    });
+    for (const field of ["model", "language"]) {
+      if (req.body[field]) formData.append(field, req.body[field]);
+    }
+    formData.append("response_format", "json");
+
+    const headers = {
+      Authorization: "Bearer " + (apiKey ? apiKey : inference_id),
+      "inference-portal": serviceName,
+    };
+    const response = await fetch(url, { method: "POST", headers, body: formData });
+    if (!response.ok) {
+      console.error("Transcription failed:", response.status);
+      return res.status(response.status).json({ error: await response.text() });
+    }
+    // The upstream can answer 200 with an error body, so check for the text
+    const result = await response.json();
+    if (typeof result?.text !== "string") {
+      console.error("Transcription returned no text");
+      return res.status(502).json({ error: "Unexpected transcription response" });
+    }
+    res.status(200).json({ text: result.text });
+  } catch (error) {
+    console.error("Error in transcription endpoint:", error.message);
+    res.status(500).json({ error: "Failed to transcribe audio." });
+  }
+});
+
+// Radiology report pipeline (modules.radiology): forwards the inputs to the
+// parser service (parser/app.py) and returns { report, edit_log, sections, usage }.
+// The inputs are patient data, so neither the request nor the report is logged.
+// The service bounds its own model calls (2 attempts × 10 min); this timeout
+// only catches a service that hangs.
+const RADIOLOGY_TIMEOUT_MS = 25 * 60 * 1000;
+
+app.post("/radiology/report", async (req, res) => {
+  if (!radiologyServiceUrl) {
+    return res.status(503).json({
+      error: "The report pipeline is not configured (radiologyServiceUrl in back.json).",
+    });
+  }
+  // reasoning: the thinking settings, as sent with a normal chat completion
+  const { previous_report, dictation, assessment, model, reasoning } = req.body;
+  try {
+    const response = await fetch(radiologyServiceUrl + "/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ previous_report, dictation, assessment, model, reasoning }),
+      signal: AbortSignal.timeout(RADIOLOGY_TIMEOUT_MS),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error("Report pipeline failed:", response.status);
+      // FastAPI puts its message in `detail` (a list for malformed requests)
+      const error = typeof result.detail === "string"
+        ? result.detail
+        : `The report pipeline failed (${response.status}).`;
+      return res.status(response.status).json({ error });
+    }
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error in report pipeline endpoint:", error.name);
+    res.status(502).json({
+      error: error.name === "AbortError"
+        ? "The report pipeline timed out."
+        : "The report pipeline is unreachable.",
+    });
   }
 });
 

@@ -566,6 +566,47 @@ export default {
       "Don't worry! You can start a new conversation by clicking the button below.",
     buttonText: "Go to chat",
   },
+  // Radiology report inputs
+  radiology: {
+    previous_report: "Previous report",
+    dictation: "Dictation",
+    assessment: "Assessment",
+    modal_title: {
+      previous_report: "Paste previous report",
+      dictation: "Paste dictation (changes only)",
+      assessment: "Paste assessment",
+    },
+    paste_placeholder: "Paste or dictate text here …",
+    verbatim_hint:
+      "The text is used exactly as pasted or dictated. Dictations are transcribed by the GWDG speech recognition service. Ctrl+Enter confirms.",
+    dictate: "Dictate",
+    dictate_stop: "Stop recording",
+    transcribing: "Transcribing …",
+    mic_insecure: "Microphone access needs HTTPS or localhost.",
+    mic_denied:
+      "Microphone access was denied. Allow it in the browser and try again.",
+    mic_not_found: "No microphone found.",
+    mic_failed: "The recording could not be started.",
+    transcription_failed: "Transcription failed. Please try again.",
+    no_speech: "No speech was recognised.",
+    edit: "Click to view or edit",
+    remove: "Remove",
+    note_placeholder: "Send to generate the report",
+    baseline_hint:
+      "Only the last added previous report ({{label}}) is used; the others are ignored.",
+    not_used: "Not used",
+    missing_inputs: "Still missing for the report: {{inputs}}",
+    inputs_only:
+      "Typed text and attachments can't be sent together with the report inputs. Remove them, or send them after the report.",
+    generating:
+      "Generating the report – with large models this can take a few minutes.",
+    show_inputs: "Show inputs",
+    hide_inputs: "Hide inputs",
+  },
+  no_access: {
+    title: "No access",
+    description: "You don't have access to this application.",
+  },
   // Announcement
   announcement: "",
 };

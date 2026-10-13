@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import MarkdownRenderer from "./MarkdownRenderer";
 import Typing from "./Typing";
 import CopyButton from "./CopyButton";
@@ -25,7 +26,12 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
   const textareaRefs = useRef([]);
   const message = localState.messages[message_index];
   const loading = message?.loading || false;
-  const [renderMode, setRenderMode] = useState("Default");
+  const { t } = useTranslation();
+  // A report from the radiology pipeline is shown verbatim unless the user
+  // picks another mode: Markdown would merge its lines
+  const isReport = !!localState.messages[message_index - 1]?.meta?.radiology?.inputs;
+  const [pickedRenderMode, setRenderMode] = useState(null);
+  const renderMode = pickedRenderMode ?? (isReport ? "Plaintext" : "Default");
   // Define render modes with better styling
   const renderModes = ["Default", "Markdown", "LaTeX", "Plaintext"];
   
@@ -181,6 +187,9 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
             ${loading ? "pb-4" : "pb-3"}`}
         >
           {loading && <Typing />}
+          {loading && isReport && (
+            <p className="pt-2 text-xs text-tertiary">{t("radiology.generating")}</p>
+          )}
           {!loading && (
             <div className="flex flex-col items-center justify-start gap-3 py-1">
               <div className="text-red-500 dark:text-red-400 text-sm font-medium text-center">

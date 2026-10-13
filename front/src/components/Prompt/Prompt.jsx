@@ -1,4 +1,5 @@
 import { useState, useEffect} from "react";
+import { useTranslation } from "react-i18next";
 
 import AbortButton from "./AbortButton";
 import SendButton from "./SendButton";
@@ -11,10 +12,15 @@ import ToolsButton from "./ToolsButton";
 import AttachButton from "./AttachButton";
 import AttachMediaButton from "./AttachMediaButton";
 import PromptTextArea from "./PromptTextArea";
+import ReportInputs from "./ReportInputs";
 
 import { useSendMessage } from "../../hooks/useSendMessage";
 import { useDebounce } from "../../hooks/useDebounce";
+import { useToast } from "../../hooks/useToast";
+import { formatInputs, missingKinds } from "../../utils/radiologyInputs";
 import UndoButton from "../Conversation/UndoButton";
+
+const radiologyModule = import.meta.env.VITE_MODULE_RADIOLOGY === "true";
 
 export default function Prompt({
   localState,
@@ -22,6 +28,8 @@ export default function Prompt({
   userData,
   modelsData,
 }) {
+  const { t } = useTranslation();
+  const { notifyError } = useToast();
   const sendMessage = useSendMessage();
   const [shouldSend, setShouldSend] = useState(false);
   const [ignoreChanges, setIgnoreChanges] = useState(false);
@@ -34,9 +42,22 @@ export default function Prompt({
 
   //const prompt = localState.messages[localState.messages.length - 1].content[0]?.text || "";
   const attachments = lastMessage.content.slice(1);
-  
+
+  // Radiology inputs live in memory only, per conversation. <Prompt> is not
+  // remounted when the conversation changes, so keying by id keeps one
+  // patient's reports from being sent in another chat.
+  const [reportDrafts, setReportDrafts] = useState({});
+  const conversationId = localState.id;
+  const reportInputs = reportDrafts[conversationId] || [];
+  const setReportInputs = (update) =>
+    setReportDrafts((prev) => ({
+      ...prev,
+      [conversationId]: update(prev[conversationId] || []),
+    }));
+  const hasReportInputs = radiologyModule && reportInputs.length > 0;
+
   // Update partial local state while preserving other values
-  const savePrompt = (nextPrompt = prompt, { clearChoices = false } = {}) => {
+  const savePrompt = (nextPrompt = prompt, { clearChoices = false, meta } = {}) => {
     setIgnoreChanges(true);
     setLocalState((prev) => {
       const messages = [...prev.messages]; // shallow copy
@@ -47,7 +68,8 @@ export default function Prompt({
             text: nextPrompt
           }, // Keep other content items
           ...prev.messages[messages.length - 1].content.slice(1)
-        ]
+        ],
+        ...(meta ? { meta } : {}),
       };
       return {
         ...prev,
@@ -84,9 +106,33 @@ export default function Prompt({
   const handleSend = async (event, nextPrompt) => {
       event.preventDefault();
       const promptToSend = typeof nextPrompt === "string" ? nextPrompt : prompt;
-      if (promptToSend?.trim() === "" && attachments.length === 0) return;
+      if (promptToSend?.trim() === "" && attachments.length === 0 && !hasReportInputs) return;
+      if (hasReportInputs) {
+        // The pipeline takes only the three inputs, so nothing typed or
+        // attached may silently go missing
+        const missing = missingKinds(reportInputs);
+        if (missing.length > 0) {
+          notifyError(t("radiology.missing_inputs", {
+            inputs: missing.map((kind) => t(`radiology.${kind}`)).join(", "),
+          }));
+          return;
+        }
+        if (promptToSend?.trim() !== "" || attachments.length > 0) {
+          notifyError(t("radiology.inputs_only"));
+          return;
+        }
+      }
       debouncedSave.cancel();
-      savePrompt(promptToSend, { clearChoices: true });
+      if (hasReportInputs) {
+        // The inputs travel in meta; the text is their readable form
+        savePrompt(formatInputs(reportInputs), {
+          clearChoices: true,
+          meta: { radiology: { inputs: reportInputs } },
+        });
+        setReportInputs(() => []);
+      } else {
+        savePrompt(promptToSend, { clearChoices: true });
+      }
       setShouldSend(true);
   };
   
@@ -100,6 +146,10 @@ export default function Prompt({
           localState={localState}
           setLocalState={setLocalState}
         />
+        {/* Radiology inputs: previous reports, dictation, assessment */}
+        {radiologyModule && (
+          <ReportInputs inputs={reportInputs} setInputs={setReportInputs} />
+        )}
         <div className={`flex flex-col gap-4 w-full relative select-none rounded-2xl shadow-lg dark:text-white text-black bg-white dark:bg-bg_secondary_dark`} >
         {/* Prompt Text Area */}
         <PromptTextArea
@@ -108,6 +158,7 @@ export default function Prompt({
           handleSend={handleSend}
           handleChange={handleChange}
           prompt={prompt}
+          hasReportInputs={hasReportInputs}
         />
         
         {/* Buttons Section */}
@@ -173,6 +224,7 @@ export default function Prompt({
               setLocalState={setLocalState}
               handleSend={handleSend}
               prompt={prompt}
+              hasReportInputs={hasReportInputs}
             />
           </div>
         </div>

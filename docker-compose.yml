@@ -21,6 +21,17 @@ services:
       - back
     restart: on-failure
 
+  # Report pipeline of the radiology module; uses back's config (apiEndpoint, apiKey)
+  parser:
+    image: chat-ai-parser:latest
+    build: ./parser
+    network_mode: "host"
+    volumes:
+      - ./parser:/usr/src/app
+    secrets:
+      - back
+    restart: on-failure
+
 secrets:
   front:
     file: ./secrets/front.json

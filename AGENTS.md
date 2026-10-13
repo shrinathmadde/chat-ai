@@ -15,11 +15,15 @@ OpenAI-compatible API endpoint. It is one of three repos in the wider architectu
 | `gwdg/saia-hub` | API gateway, SSH proxy |
 | `gwdg/saia-hpc` | Slurm scheduler + HPC scripts |
 
-Two services, no monorepo tooling — each has its own `package.json` and is installed separately:
+Three services, no monorepo tooling — each has its own dependency file and is installed separately:
 
 - **`front/`** — React 19 SPA, Vite 7, runs entirely in the user's browser. All chat data is local.
-- **`back/`** — single-file Express 4 proxy (`back/service.mjs`, 412 lines). Per README it exists to
+- **`back/`** — single-file Express 4 proxy (`back/service.mjs`). Per README it exists to
   hold the API key server-side and to prevent CORS errors in the user's browser.
+- **`parser/`** — Python FastAPI service (`app.py`) for the radiology module's report pipeline,
+  called only by `back`. `report_parser.py`, `router.py` and `chat_ai.py` are **unchanged copies**
+  from the research repo `umg-radiology-report-formatter` (`parser_approach/`, `scripts/`): change
+  them there and copy them over, don't edit them here.
 
 ## 2. Layout
 
@@ -36,7 +40,9 @@ front/src/
   config/         getModelDefaults.jsx + models/<model-id>.json capability files
   i18n/           en.js, de.js
   utils/          sendMessage, conversationUtils, attachments, appContext, tabChangeSync
-back/service.mjs  POST /documents, GET /models, GET /user, POST /audio/speech, POST /chat/completions
+back/service.mjs  POST /documents, GET /models, GET /user, POST /audio/speech,
+                  POST /audio/transcriptions, POST /chat/completions, POST /radiology/report
+parser/app.py     POST /report (radiology report pipeline, 127.0.0.1:8082)
 secrets/          front.json + back.json (gitignored; *.sample committed)
 ```
 
@@ -57,6 +63,7 @@ a front end that refuses to boot is almost always this.
 ```bash
 cd back  && npm i && npm run start   # :8081
 cd front && npm i && npm run dev     # :8080
+cd parser && pip install -r requirements.txt && uvicorn app:app --port 8082   # radiology only
 ```
 
 Both default `CONFIG_LOCATION` to `../secrets/<name>.json` and `path.resolve` it against the
@@ -69,14 +76,15 @@ rejected, check that log line first.
 ### Docker
 
 ```bash
-docker compose build front back
-docker compose up front back -d
+docker compose build           # front, back and parser
+docker compose up -d           # all three together
 docker compose restart front   # picks up config/source changes; rebuild if deps changed
 ```
 
 Each Dockerfile sets `ENV CONFIG_LOCATION=/run/secrets/{front,back}`, fed by the docker secrets
-declared in `docker-compose.yml`. Both services use `network_mode: host`, so ports are as
-configured. `front/entrypoint.sh` greps `"mode"` out of `front.json` and runs `npm run dev` for
+declared in `docker-compose.yml`; `parser` reads the `back` secret too. All services use
+`network_mode: host`, so ports are as configured, and `parser` binds `127.0.0.1` so only `back`
+on the same host can reach it. `front/entrypoint.sh` greps `"mode"` out of `front.json` and runs `npm run dev` for
 `dev` or `npm run prod` for `prod`, and exits on any other value.
 
 ### Checks
@@ -128,6 +136,18 @@ IndexedDB. Writes go through `updateConversation(id, data)` in `db/index.ts`, wh
 
 So: thread the `lastModified` you read through to the write, and handle `-1`.
 
+The unsent draft is the **last user message** in `localState.messages` (`content[0]` = typed
+text, `content[1..]` = attachments), so it is autosaved like any message. `updateConversation`
+stores only `type`, `text` and `fileId` per content item — any other field is silently dropped.
+Per-message data that must survive a reload goes in the message's `meta`, which is persisted and
+never sent upstream. `<Prompt>` is not remounted on conversation switch, so component state in it
+carries over to the next chat unless keyed by `localState.id`.
+
+A user message with `meta.radiology.inputs` is answered by the report pipeline
+(`apis/generateRadiologyReport.jsx`), not a chat completion: `sendMessage` checks the message
+being sent, so retry takes the same path. Its `content[0].text` is only a readable copy of the
+inputs, which is why its edit button is hidden.
+
 Data is normalised across `conversations → messages → content_items`, with `files_meta` /
 `files_data` holding attachment bytes keyed by `fileId`; `hydrateConversation()` joins them back
 into the nested shape the UI uses. Raw table access (`db.messages`, `db.content_items`, …) appears
@@ -158,7 +178,7 @@ restart. Read values via `import.meta.env.VITE_*`; they arrive as strings, hence
 `=== "true"` comparisons.
 
 Feature modules are gated this way — `VITE_MODULE_TOOLS`, `VITE_MODULE_FEEDBACK`,
-`VITE_MODULE_CHOICES`, `VITE_MODULE_SPEECH` (JSON, with `model` and `voice`). A deployment can
+`VITE_MODULE_CHOICES`, `VITE_MODULE_RADIOLOGY`, `VITE_MODULE_SPEECH` (JSON, with `model` and `voice`). A deployment can
 switch these parts of the UI off, so new code in those areas must still behave with the flag off.
 
 ### 4.6 Model capabilities are data, not code
@@ -170,7 +190,7 @@ registry to update.
 
 ### 4.7 Secrets
 
-The API key is read only by `back/service.mjs` from `secrets/back.json`. `secrets/.gitignore`
+The API key is read only from `secrets/back.json`, by `back/service.mjs` and `parser/app.py`. `secrets/.gitignore`
 ignores everything in that directory except itself, so real config files there are invisible to
 git. Never move a key into front-end code or into a `.sample`.
 
@@ -183,9 +203,19 @@ Verified in `back/service.mjs`:
   as a 200. Check the response body, never the status.
 - **If `apiKey` is empty, `Authorization` falls back to the `inference-id` request header** rather
   than erroring — that is how the deployed setup passes per-user credentials through.
-- **`/user` is a hard-coded placeholder** in this repo: it always returns the same `sample-user`
-  object. Real user data comes from the gateway in a full deployment, so don't debug user/usage
-  features against this response.
+- **`/user` returns a hard-coded `sample-user` placeholder unless an SSO proxy is in front.** It
+  builds the user from the `oidc_claim_*` request headers only when `oidc_claim_uid` is present,
+  so don't debug user/usage features against a local back end.
+- **Access rules (`userFilter`, `adminUsers` in `back.json`) trust the `oidc_claim_*` headers
+  blindly.** A middleware before every route returns 403 when a rule fails. This is only safe
+  when the back end is reachable solely through the SSO proxy (`deploy/README.md`).
+- **`/radiology/report` forwards to the `parser` service** at `radiologyServiceUrl` from
+  `back.json`. It returns 503 while that key is unset, and answers in one piece after up to many
+  minutes — nothing is streamed — so a proxy in front of `back` needs a long timeout for it.
+  `parser` uses `apiKey` from `back.json` and refuses requests when it is empty: the per-user
+  `inference-id` fallback does not reach it. The thinking setting travels as `reasoning`, built by
+  `config/getReasoningParams.jsx` exactly as for chat completions; without it the model uses its own
+  default (thinking on for Qwen), which made reports 30–50× slower.
 
 ## 5. Conventions
 

@@ -6,8 +6,11 @@ import { chatCompletions } from "../apis/chatCompletions";
 import generateMemory from "../apis/generateMemory";
 import generateChoiceProposal from "../apis/generateChoiceProposal";
 import generateTitle from "../apis/generateTitle";
+import generateRadiologyReport from "../apis/generateRadiologyReport";
+import getReasoningParams from "../config/getReasoningParams";
 import { loadFile, loadFileMeta, saveFile, updateConversation, updateConversationMeta } from "../db";
 import { getFileType, readFileAsBase64, readFileAsText } from "./attachments";
+import { buildReportRequest } from "./radiologyInputs";
 
 // Text to be appended to system prompt for memories
 const memoryExplanation = "The following list of memories was gathered by the system from previous conversations and may be irrelevant now. You may refer to relevant items only if justified to provide a more personalized and contextual response. Do not make any assumptions based on memories, instead focus on the user messages and requests:"
@@ -202,6 +205,13 @@ const sendMessage = async ({
     const feedbackModule = import.meta.env.VITE_MODULE_FEEDBACK === "true";
     const toolsModule = import.meta.env.VITE_MODULE_TOOLS === "true";
     const choicesModule = import.meta.env.VITE_MODULE_CHOICES === "true";
+    const radiologyModule = import.meta.env.VITE_MODULE_RADIOLOGY === "true";
+
+    // Radiology inputs on the message being sent: the report pipeline answers
+    // instead of a chat completion
+    const radiologyInputs = radiologyModule
+      ? localState.messages.at(-1)?.meta?.radiology?.inputs
+      : undefined;
 
     const isExternalModel =
       typeof localState.settings.model?.name === "string" &&
@@ -542,14 +552,32 @@ const sendMessage = async ({
     let chatChunk = null;
     let meta = undefined;
     let choicesProposed = [];
+    let editLog = null;
     try {
-      // Get chat completion response
-      chatChunk = await getChatChunk(conversationId);
-      responseContent = chatChunk?.answer || ""
-      usage = chatChunk?.usage;
+      if (radiologyInputs) {
+        // Get the complete report from the pipeline, with the same thinking
+        // setting a normal chat completion would use
+        const model = localState.settings.model;
+        const modelId = typeof model === "string" ? model : model?.id;
+        const report = await generateRadiologyReport({
+          ...buildReportRequest(radiologyInputs),
+          model: modelId,
+          reasoning: getReasoningParams(modelId, localState.settings),
+        });
+        responseContent = [{ type: "text", text: report.report }];
+        usage = report.usage;
+        editLog = report.edit_log;
+      } else {
+        // Get chat completion response
+        chatChunk = await getChatChunk(conversationId);
+        responseContent = chatChunk?.answer || ""
+        usage = chatChunk?.usage;
+      }
       meta = {
         model: localState.settings.model?.name || localState.settings.model?.id || "",
-        usage
+        usage,
+        // Kept for the planned "previous vs. new report" view
+        ...(editLog ? { radiology: { edit_log: editLog } } : {}),
       };
     } catch (error) {
       const errorType = error?.type || "Error";
@@ -562,8 +590,9 @@ const sendMessage = async ({
         error: `${errorType} ${errorStatus}: ${errorMsg.toString()}`
       };
     } finally {
-      // Update choices
-      if (choicesModule && suggestUserPrompts) {
+      // Update choices. Reports are patient data: no suggestions or memories
+      // are generated from them.
+      if (choicesModule && suggestUserPrompts && !radiologyInputs) {
         try {
           const content = localState.messages.map((message) => {
           if (Array.isArray(message.content)){
@@ -662,7 +691,7 @@ const sendMessage = async ({
 
     // Update memory if enabled
     try {
-      if (memoryMode === 2 && newUserMessage) {
+      if (memoryMode === 2 && newUserMessage && !radiologyInputs) {
         const memoryResponse = await generateMemory(
           newUserMessage,
           memories

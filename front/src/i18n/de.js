@@ -571,6 +571,48 @@ export default {
       "Keine Sorge! Sie können eine neue Unterhaltung starten, indem Sie auf den Button unten klicken.",
     buttonText: "Zum Chat gehen",
   },
+  // Radiology report inputs
+  radiology: {
+    previous_report: "Vorbefund",
+    dictation: "Diktat",
+    assessment: "Beurteilung",
+    modal_title: {
+      previous_report: "Vorbefund einfügen",
+      dictation: "Diktat einfügen (nur Änderungen)",
+      assessment: "Beurteilung einfügen",
+    },
+    paste_placeholder: "Text hier einfügen oder diktieren …",
+    verbatim_hint:
+      "Der Text wird unverändert übernommen. Diktate werden vom Spracherkennungsdienst der GWDG transkribiert. Strg+Enter bestätigt.",
+    dictate: "Diktieren",
+    dictate_stop: "Aufnahme beenden",
+    transcribing: "Wird transkribiert …",
+    mic_insecure: "Mikrofonzugriff ist nur über HTTPS oder localhost möglich.",
+    mic_denied:
+      "Der Mikrofonzugriff wurde verweigert. Bitte im Browser erlauben und erneut versuchen.",
+    mic_not_found: "Kein Mikrofon gefunden.",
+    mic_failed: "Die Aufnahme konnte nicht gestartet werden.",
+    transcription_failed:
+      "Die Transkription ist fehlgeschlagen. Bitte erneut versuchen.",
+    no_speech: "Es wurde keine Sprache erkannt.",
+    edit: "Klicken zum Ansehen oder Bearbeiten",
+    remove: "Entfernen",
+    note_placeholder: "Senden, um den Befund zu erstellen",
+    baseline_hint:
+      "Nur der zuletzt hinzugefügte Vorbefund ({{label}}) wird verwendet; die anderen werden ignoriert.",
+    not_used: "Nicht verwendet",
+    missing_inputs: "Für den Befund fehlt noch: {{inputs}}",
+    inputs_only:
+      "Getippter Text und Anhänge können nicht zusammen mit den Befund-Eingaben gesendet werden. Bitte entfernen oder nach dem Befund senden.",
+    generating:
+      "Befund wird erstellt – mit großen Modellen kann das einige Minuten dauern.",
+    show_inputs: "Eingaben anzeigen",
+    hide_inputs: "Eingaben ausblenden",
+  },
+  no_access: {
+    title: "Kein Zugriff",
+    description: "Sie haben keinen Zugriff auf diese Anwendung.",
+  },
   // Announcement
   announcement: "",
 };
