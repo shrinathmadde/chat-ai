@@ -159,6 +159,12 @@ version for "restore". Its highlight layer keeps every piece of text alone in a 
 nodes there get merged or wrapped by browser extensions (Grammarly), and React's next update then
 throws `removeChild … not a child` and blanks the whole page.
 
+Files attached to a radiology input (`modals/Chat/ReportInputModal.jsx`) are read in the browser by
+`utils/reportFiles.js` — pdf.js (legacy build) for PDF, mammoth for `.docx`, `TextDecoder` for
+`.txt` — and only their text is kept in the input. They deliberately do **not** go through
+`apis/processFile.jsx` / `/documents`: that uploads the file and returns Markdown, while the
+pipeline needs the report's own lines.
+
 Data is normalised across `conversations → messages → content_items`, with `files_meta` /
 `files_data` holding attachment bytes keyed by `fileId`; `hydrateConversation()` joins them back
 into the nested shape the UI uses. Raw table access (`db.messages`, `db.content_items`, …) appears
