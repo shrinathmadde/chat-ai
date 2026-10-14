@@ -484,6 +484,9 @@ export default {
     fork_confirm:
       "This copies the conversation up to this message into a new chat. The current conversation stays as it is, so you can try a different answer or different settings without losing anything.",
     fork_yes: "Create copy",
+    restore_report_confirm:
+      "This replaces your edits with the report as the model generated it. Your edits cannot be recovered.",
+    restore_report_yes: "Restore",
     regenerate_fork: "Fork",
     regenerate_fork_success: "Chat forked successfully",
     regenerate_fork_fail: "Chat could not be forked",
@@ -602,6 +605,18 @@ export default {
       "Generating the report – with large models this can take a few minutes.",
     show_inputs: "Show inputs",
     hide_inputs: "Hide inputs",
+    report: "Follow-up report",
+    changes_legend: "Changed compared to the previous report",
+    removed_legend: "Removed",
+    no_changes: "No changes compared to the previous report",
+    show_removed: "Show removed text",
+    hide_removed: "Back to editing",
+    edited: "Edited",
+    restore: "Restore generated report",
+    edit_hint:
+      "Click into the report to edit it. Changes are saved when you click outside the text.",
+    review_hint:
+      "Read-only view. Struck-through text was removed and is not part of the report.",
   },
   no_access: {
     title: "No access",

@@ -552,7 +552,7 @@ const sendMessage = async ({
     let chatChunk = null;
     let meta = undefined;
     let choicesProposed = [];
-    let editLog = null;
+    let radiologyMeta = null;
     try {
       if (radiologyInputs) {
         // Get the complete report from the pipeline, with the same thinking
@@ -566,7 +566,9 @@ const sendMessage = async ({
         });
         responseContent = [{ type: "text", text: report.report }];
         usage = report.usage;
-        editLog = report.edit_log;
+        // The report can be edited afterwards; `generated` keeps the model's
+        // version so the editor can restore it
+        radiologyMeta = { edit_log: report.edit_log, generated: report.report };
       } else {
         // Get chat completion response
         chatChunk = await getChatChunk(conversationId);
@@ -576,8 +578,7 @@ const sendMessage = async ({
       meta = {
         model: localState.settings.model?.name || localState.settings.model?.id || "",
         usage,
-        // Kept for the planned "previous vs. new report" view
-        ...(editLog ? { radiology: { edit_log: editLog } } : {}),
+        ...(radiologyMeta ? { radiology: radiologyMeta } : {}),
       };
     } catch (error) {
       const errorType = error?.type || "Error";
