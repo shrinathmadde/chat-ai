@@ -579,9 +579,28 @@ export default {
       dictation: "Paste dictation (changes only)",
       assessment: "Paste assessment",
     },
-    paste_placeholder: "Paste or dictate text here …",
+    paste_placeholder:
+      "Paste or dictate text here, or drop a PDF, Word or text file …",
     verbatim_hint:
-      "The text is used exactly as pasted or dictated. Dictations are transcribed by the GWDG speech recognition service. Ctrl+Enter confirms.",
+      "The text is used exactly as pasted, dictated or read from a file. Dictations are transcribed by the GWDG speech recognition service. Ctrl+Enter confirms.",
+    attach_file: "Attach PDF, Word or text file",
+    reading_file: "Reading file …",
+    remove_file: "Remove {{name}} and its text",
+    file_hint:
+      "Files are read on this computer and not uploaded. Check the text and remove headers, footers and anything else that isn't part of the report.",
+    file_text_edited:
+      "The text from {{name}} was edited, so it was left in place. Delete it in the text box if needed.",
+    file_error: {
+      unsupported:
+        "{{name}}: only PDF, Word (.docx) and text (.txt) files can be read.",
+      legacy_doc:
+        "{{name}}: old Word files (.doc) can't be read. Save it as .docx or PDF and try again.",
+      too_large: "{{name}} is larger than {{size}} MB.",
+      password: "{{name}} is password-protected.",
+      no_text:
+        "{{name}} contains no text. Scanned documents (images only) can't be read.",
+      failed: "{{name}} could not be read.",
+    },
     dictate: "Dictate",
     dictate_stop: "Stop recording",
     transcribing: "Transcribing …",

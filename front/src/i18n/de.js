@@ -584,9 +584,28 @@ export default {
       dictation: "Diktat einfügen (nur Änderungen)",
       assessment: "Beurteilung einfügen",
     },
-    paste_placeholder: "Text hier einfügen oder diktieren …",
+    paste_placeholder:
+      "Text hier einfügen oder diktieren, oder eine PDF-, Word- oder Textdatei hierher ziehen …",
     verbatim_hint:
-      "Der Text wird unverändert übernommen. Diktate werden vom Spracherkennungsdienst der GWDG transkribiert. Strg+Enter bestätigt.",
+      "Der Text wird unverändert übernommen, ob eingefügt, diktiert oder aus einer Datei gelesen. Diktate werden vom Spracherkennungsdienst der GWDG transkribiert. Strg+Enter bestätigt.",
+    attach_file: "PDF-, Word- oder Textdatei anhängen",
+    reading_file: "Datei wird gelesen …",
+    remove_file: "{{name}} und ihren Text entfernen",
+    file_hint:
+      "Dateien werden auf diesem Computer gelesen und nicht hochgeladen. Bitte den Text prüfen und Kopf- und Fußzeilen sowie alles entfernen, was nicht zum Befund gehört.",
+    file_text_edited:
+      "Der Text aus {{name}} wurde bearbeitet und bleibt deshalb stehen. Bei Bedarf im Textfeld löschen.",
+    file_error: {
+      unsupported:
+        "{{name}}: Nur PDF-, Word- (.docx) und Textdateien (.txt) können gelesen werden.",
+      legacy_doc:
+        "{{name}}: Alte Word-Dateien (.doc) können nicht gelesen werden. Bitte als .docx oder PDF speichern und erneut versuchen.",
+      too_large: "{{name}} ist größer als {{size}} MB.",
+      password: "{{name}} ist passwortgeschützt.",
+      no_text:
+        "{{name}} enthält keinen Text. Gescannte Dokumente (nur Bilder) können nicht gelesen werden.",
+      failed: "{{name}} konnte nicht gelesen werden.",
+    },
     dictate: "Diktieren",
     dictate_stop: "Aufnahme beenden",
     transcribing: "Wird transkribiert …",
