@@ -27,6 +27,7 @@
     "@vitejs/plugin-react": "^5.0.0",
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",
+    "diff": "^8.0.4",
     "dompurify": "^3.4.12",
     "formik": "^2.4.9",
     "framer-motion": "^12.42.2",

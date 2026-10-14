@@ -485,6 +485,9 @@ export default {
     fork_confirm:
       "Die Unterhaltung wird bis zu dieser Nachricht in einen neuen Chat kopiert. Die aktuelle Unterhaltung bleibt unverändert, Sie können also eine andere Antwort oder andere Einstellungen ausprobieren, ohne etwas zu verlieren.",
     fork_yes: "Kopie erstellen",
+    restore_report_confirm:
+      "Ihre Änderungen werden durch den Befund ersetzt, wie das Modell ihn erzeugt hat. Die Änderungen können nicht wiederhergestellt werden.",
+    restore_report_yes: "Wiederherstellen",
     regenerate_fork: "Kopie",
     regenerate_fork_success: "Chat erfolgreich geforkt",
     regenerate_fork_fail: "Chat konnte nicht geforkt werden.",
@@ -608,6 +611,18 @@ export default {
       "Befund wird erstellt – mit großen Modellen kann das einige Minuten dauern.",
     show_inputs: "Eingaben anzeigen",
     hide_inputs: "Eingaben ausblenden",
+    report: "Folgebefund",
+    changes_legend: "Geändert gegenüber dem Vorbefund",
+    removed_legend: "Entfernt",
+    no_changes: "Keine Änderungen gegenüber dem Vorbefund",
+    show_removed: "Entfernten Text anzeigen",
+    hide_removed: "Zurück zum Bearbeiten",
+    edited: "Bearbeitet",
+    restore: "Generierten Befund wiederherstellen",
+    edit_hint:
+      "Klicken Sie in den Befund, um ihn zu bearbeiten. Änderungen werden gespeichert, sobald Sie außerhalb des Textes klicken.",
+    review_hint:
+      "Nur Ansicht. Durchgestrichener Text wurde entfernt und ist nicht Teil des Befunds.",
   },
   no_access: {
     title: "Kein Zugriff",

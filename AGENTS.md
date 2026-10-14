@@ -81,6 +81,12 @@ docker compose up -d           # all three together
 docker compose restart front   # picks up config/source changes; rebuild if deps changed
 ```
 
+`front` and `back` keep `node_modules` in an anonymous volume (`- /usr/src/app/node_modules` in
+`docker-compose.yml`) while the source is bind-mounted. A dependency added on the host is therefore
+missing in the container — Vite shows `Failed to resolve import` — and compose reuses the old
+volume when it recreates the container. After a dependency change run
+`docker compose build front && docker compose up -d -V front` (`-V` renews anonymous volumes).
+
 Each Dockerfile sets `ENV CONFIG_LOCATION=/run/secrets/{front,back}`, fed by the docker secrets
 declared in `docker-compose.yml`; `parser` reads the `back` secret too. All services use
 `network_mode: host`, so ports are as configured, and `parser` binds `127.0.0.1` so only `back`
@@ -146,7 +152,12 @@ carries over to the next chat unless keyed by `localState.id`.
 A user message with `meta.radiology.inputs` is answered by the report pipeline
 (`apis/generateRadiologyReport.jsx`), not a chat completion: `sendMessage` checks the message
 being sent, so retry takes the same path. Its `content[0].text` is only a readable copy of the
-inputs, which is why its edit button is hidden.
+inputs, which is why its edit button is hidden. The answer is shown in
+`MessageAssistant/ReportEditor.jsx`, edited in place in its `content[0].text`, with changes against
+the baseline input highlighted by `utils/reportDiff.js`; `meta.radiology.generated` keeps the model's
+version for "restore". Its highlight layer keeps every piece of text alone in a `<span>`: loose text
+nodes there get merged or wrapped by browser extensions (Grammarly), and React's next update then
+throws `removeChild … not a child` and blanks the whole page.
 
 Data is normalised across `conversations → messages → content_items`, with `files_meta` /
 `files_data` holding attachment bytes keyed by `fileId`; `hydrateConversation()` joins them back

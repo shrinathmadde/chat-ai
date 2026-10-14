@@ -13,6 +13,8 @@ import MetaBox from "./MetaBox";
 import FeedbackButtons from "./FeedbackButtons";
 import ForkButton from "./ForkButton";
 import SpeakButton from "./SpeakButton";
+import ReportEditor from "./ReportEditor";
+import { baselineIndex } from "../../../utils/radiologyInputs";
 
 // Constants
 const MAX_HEIGHT = 200;
@@ -27,11 +29,12 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
   const message = localState.messages[message_index];
   const loading = message?.loading || false;
   const { t } = useTranslation();
-  // A report from the radiology pipeline is shown verbatim unless the user
-  // picks another mode: Markdown would merge its lines
-  const isReport = !!localState.messages[message_index - 1]?.meta?.radiology?.inputs;
-  const [pickedRenderMode, setRenderMode] = useState(null);
-  const renderMode = pickedRenderMode ?? (isReport ? "Plaintext" : "Default");
+  // A report from the radiology pipeline is shown in the report editor, with
+  // its changes to the previous report (the baseline input) highlighted
+  const reportInputs = localState.messages[message_index - 1]?.meta?.radiology?.inputs;
+  const isReport = !!reportInputs;
+  const previousReport = isReport ? reportInputs[baselineIndex(reportInputs)]?.text : undefined;
+  const [renderMode, setRenderMode] = useState("Default");
   // Define render modes with better styling
   const renderModes = ["Default", "Markdown", "LaTeX", "Plaintext"];
   
@@ -138,8 +141,23 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
     setEditMode(false);
   };
 
+  // Save from the report editor, unless the user has switched conversations
+  const handleSaveReport = (text) => {
+    const conversationId = localState.id;
+    setLocalState((prev) => {
+      if (prev.id !== conversationId) return prev;
+      const messages = [...prev.messages];
+      const { content } = messages[message_index];
+      messages[message_index] = {
+        ...messages[message_index],
+        content: [{ ...content[0], text }, ...content.slice(1)],
+      };
+      return { ...prev, messages, flush: true };
+    });
+  };
+
   // Function to handle saving edited message
-  const handleSaveFB = () => {    
+  const handleSaveFB = () => {
     const msg = localState.messages[message_index];
     setFeedbackMode(false);    
     sendFeedbackFunc(msg.feedback?.rating, feedbackText, msg?.feedback?.result);
@@ -300,9 +318,19 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
           {/* Display message content */}
           {!editMode && !feedbackMode && (
             <div className="flex flex-col gap-4">
-              <MarkdownRenderer isLoading={loading} renderMode={renderMode}>
-                {message.content[0]?.text}
-              </MarkdownRenderer>
+              {isReport ? (
+                <ReportEditor
+                  key={localState.id}
+                  text={content}
+                  previous={previousReport}
+                  generated={message?.meta?.radiology?.generated}
+                  onSave={handleSaveReport}
+                />
+              ) : (
+                <MarkdownRenderer isLoading={loading} renderMode={renderMode}>
+                  {message.content[0]?.text}
+                </MarkdownRenderer>
+              )}
               {/* Attachments Section */}
               {Array.isArray(message?.content) && message?.content.length > 1 && (
                 <div className="flex flex-wrap gap-2 pr-1 pb-1 max-h-24 sm:max-h-28 md:max-h-40 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
@@ -326,11 +354,12 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
                   <CopyButton message={message} />
                   <SpeakButton message={message} />
                   <ForkButton handleForkConversation={handleForkConversation} />
-                  <EditButton setEditMode={setEditMode} />
+                  {/* A report is edited in place, as plain text */}
+                  {!isReport && <EditButton setEditMode={setEditMode} />}
                   {/* Vertical seperator like | */}
-                  <div className="hidden md:flex w-px h-6 bg-gray-200 dark:bg-gray-600 opacity-25 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  {!isReport && <div className="hidden md:flex w-px h-6 bg-gray-200 dark:bg-gray-600 opacity-25 group-hover:opacity-100 transition-opacity duration-300"></div>}
                   {/* Render Mode Selector on the bottom left*/}
-                  <div className="hidden md:flex h-6 bg-gray-200 dark:bg-gray-600 dark:bg-gray-700  rounded-xl overflow-hidden opacity-25 group-hover:opacity-100 transition-opacity duration-300 ">
+                  {!isReport && <div className="hidden md:flex h-6 bg-gray-200 dark:bg-gray-600 dark:bg-gray-700  rounded-xl overflow-hidden opacity-25 group-hover:opacity-100 transition-opacity duration-300 ">
                     {renderModes.map((mode) => (
                       <button
                         key={mode}
@@ -348,7 +377,7 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
                         {mode}
                       </button>
                     ))}
-                  </div>
+                  </div>}
                   { /* Show message metadata */
                   message?.meta && (<div className="w-px h-6 bg-gray-200 dark:bg-gray-600 opacity-25 group-hover:opacity-100 transition-opacity duration-300"></div>)}
                   {
