@@ -215,9 +215,15 @@ git. Never move a key into front-end code or into a `.sample`.
 
 Verified in `back/service.mjs`:
 
-- **`/models` always returns HTTP 200**, even when the upstream rejects the request — the handler is
-  `res.status(200).json(await response.json())`, so an upstream `{"message":"Unauthorized"}` arrives
-  as a 200. Check the response body, never the status.
+- **`/models` always returns HTTP 200**, even when the upstream rejects the request — the handler
+  passes the upstream body on with `res.status(200)`, so an upstream `{"message":"Unauthorized"}`
+  arrives as a 200. Check the response body, never the status.
+- **`allowExternalModels: false` in `back.json`** removes external models from `/models` (by
+  `isExternalModel`: the `external` flag, "external" in the name, or the `claude` / `openai-` id
+  rule) and makes `requireInternalModel` refuse `/chat/completions` and `/radiology/report` for any
+  model not in the last internal list, with a 403. The front end needs no flag: a conversation whose
+  model is missing from the list falls back to the first listed model (`ModelSelectorWrapper.tsx`).
+  The title, memory and proposal models from `front.json` must be internal, or those calls fail.
 - **If `apiKey` is empty, `Authorization` falls back to the `inference-id` request header** rather
   than erroring — that is how the deployed setup passes per-user credentials through.
 - **`/user` returns a hard-coded `sample-user` placeholder unless an SSO proxy is in front.** It

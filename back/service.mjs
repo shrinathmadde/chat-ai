@@ -28,6 +28,9 @@ let userFilter = {};
 // Users (uid or email) that skip all rules
 let adminUsers = [];
 let radiologyServiceUrl = "";
+// false: only internal (GWDG-hosted) models are listed and accepted, e.g. for
+// a deployment that handles patient data
+let allowExternalModels = true;
 
 // Load configuration
 try {
@@ -48,6 +51,8 @@ try {
   }
   adminUsers = normalizeList(config.adminUsers);
   radiologyServiceUrl = config.radiologyServiceUrl || "";
+  allowExternalModels = config.allowExternalModels !== false;
+  console.log("External models:", allowExternalModels ? "allowed" : "blocked");
 } catch (error) {
   console.error("Failed to read back.json. Using default values.", error);
 }
@@ -127,6 +132,72 @@ app.use((req, res, next) => {
   return res.status(403).json({ error: "Access denied." });
 });
 
+// External models (hosted outside GWDG, e.g. by OpenAI or Anthropic). The id
+// rule alone decides whether tools can run on the server.
+function isExternalModelId(id) {
+  return (id.startsWith("openai-") && !id.startsWith("openai-gpt-oss")) || id.startsWith("claude");
+}
+
+// For allowExternalModels: external if the API marks it so, its name says so
+// (as the front end's model filter decides) or its id does. In doubt, a model
+// counts as external.
+function isExternalModel(model) {
+  return (
+    model?.external === true ||
+    /external/i.test(String(model?.name ?? "")) ||
+    isExternalModelId(String(model?.id ?? ""))
+  );
+}
+
+// Ids of the internal models in the last model list
+let internalModelIds = new Set();
+
+async function fetchModels(inference_id) {
+  const response = await fetch(apiEndpoint + "/models", {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      // The per-user inference-id when there is no API key
+      Authorization: "Bearer " + (apiKey ? apiKey : inference_id),
+      "inference-portal": serviceName,
+    },
+  });
+  // The upstream can answer with an error body instead of the list
+  const body = await response.json();
+  if (Array.isArray(body?.data)) {
+    internalModelIds = new Set(
+      body.data.filter((model) => !isExternalModel(model)).map((model) => model.id)
+    );
+  }
+  return body;
+}
+
+// Without external models, a request that runs one is refused. The model list
+// already leaves them out, but a request can still name one: an old
+// conversation, shared settings, a direct call. A model not in the last list
+// is looked up once more, and refused if the list can't be fetched.
+async function requireInternalModel(req, res, next) {
+  if (allowExternalModels) return next();
+  const model = req.body?.model;
+  let listed = true;
+  if (typeof model === "string" && !isExternalModelId(model)) {
+    if (!internalModelIds.has(model)) {
+      try {
+        listed = Array.isArray((await fetchModels(req.headers["inference-id"]))?.data);
+      } catch (error) {
+        listed = false;
+        console.error("Could not fetch the model list:", error.message);
+      }
+    }
+    if (internalModelIds.has(model)) return next();
+  }
+  return res.status(403).json({
+    error: listed
+      ? `Only internal models can be used here, and ${model} is not one. Please choose another model.`
+      : `The model list could not be loaded to check that ${model} is an internal model. Please try again.`,
+  });
+}
+
 // Function to process file with docling
 async function processFile(file, inference_id) {
   const url = apiEndpoint + "/documents/convert/file";
@@ -189,24 +260,14 @@ app.post("/documents/convert/file", async (req, res) => {
   }
 });
 
-// Get list of models
+// Get list of models, without the external ones unless allowExternalModels
 app.get("/models", async (req, res) => {
   try {
-    const url = apiEndpoint + "/models";
-    const inference_id = req.headers["inference-id"];
-    const headers = {
-      Accept: "application/json",
-      Authorization: "Bearer " + apiKey,
-      "inference-portal": serviceName,
-    };
-    if (apiKey) {
-      headers.Authorization = "Bearer " + apiKey;
-    } else {
-      // Only add inference-id header if apiKey is empty or non-existent
-      headers.Authorization = "Bearer " + inference_id;
+    const body = await fetchModels(req.headers["inference-id"]);
+    if (!allowExternalModels && Array.isArray(body?.data)) {
+      body.data = body.data.filter((model) => !isExternalModel(model));
     }
-    const response = await fetch(url, { method: "GET", headers });
-    res.status(200).json(await response.json());
+    res.status(200).json(body);
   } catch (error) {
     console.error(`Error: ${error}`);
     res.status(500).json({ error: "Failed to fetch models." });
@@ -318,7 +379,7 @@ app.post("/audio/transcriptions", async (req, res) => {
 // only catches a service that hangs.
 const RADIOLOGY_TIMEOUT_MS = 25 * 60 * 1000;
 
-app.post("/radiology/report", async (req, res) => {
+app.post("/radiology/report", requireInternalModel, async (req, res) => {
   if (!radiologyServiceUrl) {
     return res.status(503).json({
       error: "The report pipeline is not configured (radiologyServiceUrl in back.json).",
@@ -354,7 +415,7 @@ app.post("/radiology/report", async (req, res) => {
 });
 
 // Chat Completions API
-app.post("/chat/completions", async (req, res) => {
+app.post("/chat/completions", requireInternalModel, async (req, res) => {
   const {
     messages,
     model,
@@ -409,7 +470,7 @@ app.post("/chat/completions", async (req, res) => {
       reasoning_effort: reasoning_effort,
     }
 
-    const isExternalModel = (model.startsWith("openai-") && !model.startsWith("openai-gpt-oss")) || model.startsWith("claude");
+    const isExternalModel = isExternalModelId(model);
     inference_service = model;
 
     if (arcana && arcana.id !== "") {
