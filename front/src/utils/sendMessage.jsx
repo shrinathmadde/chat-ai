@@ -567,8 +567,13 @@ const sendMessage = async ({
         responseContent = [{ type: "text", text: report.report }];
         usage = report.usage;
         // The report can be edited afterwards; `generated` keeps the model's
-        // version so the editor can restore it
-        radiologyMeta = { edit_log: report.edit_log, generated: report.report };
+        // version so the editor can restore it. `assessment_generated`: no
+        // assessment was given, the model updated the previous one.
+        radiologyMeta = {
+          edit_log: report.edit_log,
+          generated: report.report,
+          ...(report.assessment_generated ? { assessment_generated: true } : {}),
+        };
       } else {
         // Get chat completion response
         chatChunk = await getChatChunk(conversationId);

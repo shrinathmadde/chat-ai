@@ -31,18 +31,26 @@ DATASET = Path("data/derived/report_pairs.csv")
 
 HEADER = "(Kopfzeile)"  # exam title / technique lines before the first main part
 
+# The findings part: "Befund", "Befunde", or with the modality, "CT-Befund", "MRT-Befund".
+# Not "Vorbefund", which names the comparison exam.
+FINDINGS = r"(?:[A-Za-zÄÖÜäöüß]+-)?Befunde?"
 # Main parts of a report, on a line of their own; the colon is sometimes missing.
 TOP_LEVEL = re.compile(
-    r"^(Anamnese und Fragestellung|Fragestellung|Indikation|Klinik|Technik|CT-Befund|Befund|Beurteilung)"
+    rf"^(Anamnese und Fragestellung|Fragestellung|Indikation|Klinik|Technik|{FINDINGS}|Beurteilung)"
     r"\s*:?\s*$",
     re.I,
 )
 # The same main parts with their text on the marker line: "Technik: 2x192-Zeilen Spiral-CT ..."
 TOP_INLINE = re.compile(
-    r"^(Anamnese und Fragestellung|Fragestellung|Indikation|Klinik|Technik|CT-Befund|Befund|Beurteilung)"
+    rf"^(Anamnese und Fragestellung|Fragestellung|Indikation|Klinik|Technik|{FINDINGS}|Beurteilung)"
     r"\s*:\s*\S.*$",
     re.I,
 )
+
+
+def is_findings(heading: str) -> bool:
+    """Whether a main part is the findings, whatever modality its heading names."""
+    return re.fullmatch(FINDINGS, heading.strip(), re.I) is not None
 # "Pharynx: Unauffällig." / "Gallenblase und -wege: ..." / "Thorax:" (text on the next lines)
 ITEM = re.compile(r"^([A-ZÄÖÜ][A-Za-zÄÖÜäöüß/(),\- ]{1,45}?)\s*:\s*(.*)$")
 # "Hals" / "Muskuloskelettal" — a body region alone on its line

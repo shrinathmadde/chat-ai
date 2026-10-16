@@ -373,7 +373,8 @@ app.post("/audio/transcriptions", async (req, res) => {
 });
 
 // Radiology report pipeline (modules.radiology): forwards the inputs to the
-// parser service (parser/app.py) and returns { report, edit_log, sections, usage }.
+// parser service (parser/app.py) and returns { report, edit_log, sections, usage,
+// assessment_generated }.
 // The inputs are patient data, so neither the request nor the report is logged.
 // The service bounds its own model calls (2 attempts × 10 min); this timeout
 // only catches a service that hangs.

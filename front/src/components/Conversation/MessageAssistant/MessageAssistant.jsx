@@ -324,6 +324,7 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
                   text={content}
                   previous={previousReport}
                   generated={message?.meta?.radiology?.generated}
+                  assessmentGenerated={!!message?.meta?.radiology?.assessment_generated}
                   onSave={handleSaveReport}
                 />
               ) : (

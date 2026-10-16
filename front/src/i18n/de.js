@@ -582,8 +582,15 @@ export default {
     modal_title: {
       previous_report: "Vorbefund einfügen",
       dictation: "Diktat einfügen (nur Änderungen)",
-      assessment: "Beurteilung einfügen",
+      assessment: "Beurteilung einfügen (optional)",
     },
+    optional: "optional",
+    optional_hint: {
+      assessment:
+        "Ohne Beurteilung aktualisiert das Modell die Beurteilung des Vorbefunds.",
+    },
+    assessment_generated_hint:
+      "Es wurde keine Beurteilung angegeben, daher hat das Modell die Beurteilung des Vorbefunds aktualisiert. Bitte sorgfältig prüfen, auch das Verlaufsurteil: Eine unveränderte Beurteilung ist nicht hervorgehoben.",
     paste_placeholder:
       "Text hier einfügen oder diktieren, oder eine PDF-, Word- oder Textdatei hierher ziehen …",
     verbatim_hint:

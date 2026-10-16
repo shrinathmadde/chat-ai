@@ -29,12 +29,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from chat_ai import ChatAI, ChatAIError  # noqa: E402
-from report_parser import Section, parse, render  # noqa: E402
+from report_parser import Section, is_findings, parse, render  # noqa: E402
 
 DATASET = Path("data/derived/report_pairs.csv")
 OUT_ROOT = Path("data/parser_approach/generated")
-
-FINDINGS = {"befund", "ct-befund"}
 
 SYSTEM_PROMPT = """\
 Du bist ein Werkzeug zum Schreiben radiologischer Befunde an der Universitätsmedizin Göttingen.
@@ -73,9 +71,14 @@ DIKTAT DES RADIOLOGEN (nur Änderungen):
 
 
 def targets(sections: list[Section]) -> list[Section]:
-    """Sections the dictation may be routed into: everything under the findings part."""
-    found = [s for s in sections if s.path[0].lower() in FINDINGS]
-    return found or [s for s in sections if s.path[0] != sections[0].path[0]]
+    """Sections the dictation may be routed into: everything under the findings part.
+
+    Never the assessment, not even in a report without a findings heading: apply() replaces
+    it at the end, so a dictated sentence routed there would vanish from the report.
+    """
+    body = [s for s in sections if s.path[0].lower() != "beurteilung"]
+    found = [s for s in body if is_findings(s.path[0])]
+    return found or [s for s in body if s.path[0] != sections[0].path[0]]
 
 
 def schema(addresses: list[str], parents: list[str]) -> dict:

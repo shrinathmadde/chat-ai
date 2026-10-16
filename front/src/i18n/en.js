@@ -577,8 +577,15 @@ export default {
     modal_title: {
       previous_report: "Paste previous report",
       dictation: "Paste dictation (changes only)",
-      assessment: "Paste assessment",
+      assessment: "Paste assessment (optional)",
     },
+    optional: "optional",
+    optional_hint: {
+      assessment:
+        "Without an assessment, the model updates the one from the previous report.",
+    },
+    assessment_generated_hint:
+      "No assessment was given, so the model updated the one from the previous report. Check it carefully, including the course judgement: an unchanged assessment shows no highlight.",
     paste_placeholder:
       "Paste or dictate text here, or drop a PDF, Word or text file …",
     verbatim_hint:

@@ -5,11 +5,12 @@
 // the complete follow-up report. Pasted text is passed on verbatim: never trim
 // or re-wrap it, the report layout carries meaning.
 
-// Kinds in the order they appear in the UI. The pipeline needs all three.
+// Kinds in the order they appear in the UI. Without an assessment, the
+// pipeline has the model update the previous report's one.
 export const REPORT_KINDS = {
   previous_report: { multiple: true },
   dictation: { multiple: false },
-  assessment: { multiple: false },
+  assessment: { multiple: false, optional: true },
 };
 
 const KIND_ORDER = Object.keys(REPORT_KINDS);
@@ -33,7 +34,9 @@ export function baselineIndex(inputs) {
 // Kinds the pipeline needs that are still missing or empty
 export function missingKinds(inputs) {
   return KIND_ORDER.filter(
-    (kind) => !inputs.some((input) => input.kind === kind && input.text.trim() !== "")
+    (kind) =>
+      !REPORT_KINDS[kind].optional &&
+      !inputs.some((input) => input.kind === kind && input.text.trim() !== "")
   );
 }
 

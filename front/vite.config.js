@@ -51,6 +51,9 @@ try {
     } else if (key == "announcement") {
       process.env["VITE_ANNOUNCEMENT"] = value;
       console.log("Announcement:", value);
+    } else if (key == "language") {
+      process.env["VITE_DEFAULT_LANGUAGE"] = value;
+      console.log("Language:", value || "(browser language)");
     } else if (key == "modules"){
       console.log("Modules:", JSON.stringify(value));
       try {

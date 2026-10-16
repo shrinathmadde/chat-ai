@@ -38,7 +38,7 @@ export default async function generateRadiologyReport({
     error.status = response.status;
     throw error;
   }
-  return result; // { report, edit_log, sections, usage }
+  return result; // { report, edit_log, sections, usage, assessment_generated }
 }
 
 export function abortRadiologyReport() {

@@ -21,9 +21,13 @@ Three services, no monorepo tooling — each has its own dependency file and is 
 - **`back/`** — single-file Express 4 proxy (`back/service.mjs`). Per README it exists to
   hold the API key server-side and to prevent CORS errors in the user's browser.
 - **`parser/`** — Python FastAPI service (`app.py`) for the radiology module's report pipeline,
-  called only by `back`. `report_parser.py`, `router.py` and `chat_ai.py` are **unchanged copies**
-  from the research repo `umg-radiology-report-formatter` (`parser_approach/`, `scripts/`): change
-  them there and copy them over, don't edit them here.
+  called only by `back`. `report_parser.py` splits a report into sections, `router.py` routes the
+  dictation into them, `chat_ai.py` calls the model. They started as copies from the research repo
+  `umg-radiology-report-formatter`, but **this directory is the main code**: change them here.
+  The `main()` command-line tools and `DATASET` paths in `report_parser.py` and `router.py` are
+  leftovers from that repo.
+  `router.targets()` must never offer the Beurteilung to the model: `apply()` overwrites it with
+  the assessment at the end, so anything routed there would silently vanish.
 
 ## 2. Layout
 
@@ -152,7 +156,11 @@ carries over to the next chat unless keyed by `localState.id`.
 A user message with `meta.radiology.inputs` is answered by the report pipeline
 (`apis/generateRadiologyReport.jsx`), not a chat completion: `sendMessage` checks the message
 being sent, so retry takes the same path. Its `content[0].text` is only a readable copy of the
-inputs, which is why its edit button is hidden. The answer is shown in
+inputs, which is why its edit button is hidden. The assessment input is optional
+(`REPORT_KINDS.assessment.optional`): without it `parser/app.py` runs a second model call in
+parallel with the routing that updates the previous report's assessment (`write_assessment`),
+pastes it in place of `ASSESSMENT_SLOT`, and returns `assessment_generated`, kept in
+`meta.radiology` for the editor's check notice. The answer is shown in
 `MessageAssistant/ReportEditor.jsx`, edited in place in its `content[0].text`, with changes against
 the baseline input highlighted by `utils/reportDiff.js`; `meta.radiology.generated` keeps the model's
 version for "restore". Its highlight layer keeps every piece of text alone in a `<span>`: loose text
@@ -189,7 +197,9 @@ inside `db/`. UI strings and i18n keys say topic.
 `secrets/front.json` is read **at Vite startup** and hand-mapped into `process.env.VITE_*`:
 `VITE_BACKEND_ENDPOINT`, `VITE_MODELS_ENDPOINT`, `VITE_USERDATA_ENDPOINT`,
 `VITE_DEFAULT_SETTINGS`, `VITE_TITLE_GENERATION_MODEL`, `VITE_MEMORY_GENERATION_MODEL`,
-`VITE_PROPOSAL_GENERATION_MODEL`, `VITE_ANNOUNCEMENT`, `VITE_MODULE_*`. Consequences: **a new
+`VITE_PROPOSAL_GENERATION_MODEL`, `VITE_ANNOUNCEMENT`, `VITE_DEFAULT_LANGUAGE`, `VITE_MODULE_*`.
+`VITE_DEFAULT_LANGUAGE` (`language`) makes `i18n.jsx` skip browser detection and keep the user's
+flag choice under its own localStorage key, `chat-ai-language`. Consequences: **a new
 config key requires editing `front/vite.config.js` too**, and a config change requires a dev-server
 restart. Read values via `import.meta.env.VITE_*`; they arrive as strings, hence the
 `=== "true"` comparisons.

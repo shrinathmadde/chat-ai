@@ -48,8 +48,10 @@ function Segments({ segments, showRemoved }) {
 // Follow-up report from the radiology pipeline, editable in place. Text that
 // differs from the previous report is highlighted green; "Show removed text"
 // switches to a read-only view that also shows, struck through, what was taken
-// out. Edits are saved when the text box loses focus.
-export default function ReportEditor({ text, previous, generated, onSave }) {
+// out. Edits are saved when the text box loses focus. A notice asks to check
+// the assessment when the model wrote it: an unchanged course judgement
+// carried over by mistake would show no highlight.
+export default function ReportEditor({ text, previous, generated, assessmentGenerated, onSave }) {
   const { t } = useTranslation();
   const { confirmAction } = useModal();
   const [draft, setDraft] = useState(text);
@@ -87,6 +89,11 @@ export default function ReportEditor({ text, previous, generated, onSave }) {
 
   return (
     <div className="flex flex-col gap-1.5">
+      {assessmentGenerated && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          {t("radiology.assessment_generated_hint")}
+        </p>
+      )}
       {/* Legend and actions */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

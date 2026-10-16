@@ -85,10 +85,12 @@ export default function ReportInputs({ inputs, setInputs }) {
           className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium
                    border border-dashed border-gray-300 dark:border-gray-600
                    text-tertiary hover:bg-gray-100 dark:hover:bg-gray-800"
+          title={REPORT_KINDS[kind].optional ? t(`radiology.optional_hint.${kind}`) : undefined}
           onClick={() => addInput(kind)}
         >
           <Add size={16} />
           {t(`radiology.${kind}`)}
+          {REPORT_KINDS[kind].optional && ` (${t("radiology.optional")})`}
         </button>
       ))}
       {hasUnused && (
