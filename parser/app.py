@@ -39,7 +39,7 @@ from pydantic import BaseModel
 
 from chat_ai import ChatAI, ChatAIError, Completion
 from report_parser import parse
-from router import run_case
+from router import run_case, targets
 
 # The slowest models in the evaluation took ~10 min per case. A second attempt covers the
 # transient 429/5xx of the shared cluster without letting one request run for an hour.
@@ -172,6 +172,8 @@ def report(request: ReportRequest) -> dict:
         raise HTTPException(422, f"Missing input: {', '.join(missing)}")
     if not API_KEY:
         raise HTTPException(503, "The report pipeline has no API key (apiKey in back.json).")
+    if not targets(parse(request.previous_report)):
+        raise HTTPException(422, "The previous report has no findings to update, only an assessment.")
 
     generate = not request.assessment.strip()
     row = {
@@ -192,7 +194,8 @@ def report(request: ReportRequest) -> dict:
 
         # The assessment needs only the inputs, not the routed findings, so both calls run at
         # the same time and the report takes as long as the slower one
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        pool = ThreadPoolExecutor(max_workers=2)
+        try:
             routed = pool.submit(run_case, client(), request.model, row, MAX_TOKENS)
             written = (
                 pool.submit(write_assessment, client(), request.model, request.previous_report,
@@ -201,6 +204,9 @@ def report(request: ReportRequest) -> dict:
             )
             result = routed.result()
             assessment = written.result() if written else None
+        finally:
+            # When one call fails the error goes back at once; the other one ends unread
+            pool.shutdown(wait=False, cancel_futures=True)
     except ChatAIError as error:
         # Returned to the caller but not logged: upstream error text could quote the request.
         log.warning("Chat AI call failed for model %s", request.model)

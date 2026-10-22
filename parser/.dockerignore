@@ -3,3 +3,4 @@ __pycache__
 .env
 Dockerfile
 .dockerignore
+test_*.py

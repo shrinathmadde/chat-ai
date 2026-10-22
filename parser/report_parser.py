@@ -30,6 +30,7 @@ from pathlib import Path
 DATASET = Path("data/derived/report_pairs.csv")
 
 HEADER = "(Kopfzeile)"  # exam title / technique lines before the first main part
+FOOTER = "(Fußzeile)"  # greeting and signature after the findings or the assessment
 
 # The findings part: "Befund", "Befunde", or with the modality, "CT-Befund", "MRT-Befund".
 # Not "Vorbefund", which names the comparison exam.
@@ -57,6 +58,41 @@ ITEM = re.compile(r"^([A-ZÄÖÜ][A-Za-zÄÖÜäöüß/(),\- ]{1,45}?)\s*:\s*(.*
 REGION = re.compile(r"^([A-ZÄÖÜ][A-Za-zÄÖÜäöüß/\- ]{2,40})$")
 
 MAX_HEADING_WORDS = 5
+
+# Where the report text ends in a report copied from a PDF: the greeting, the doctor's title or
+# the electronic-release note. Without this the signature counted as part of the assessment,
+# which is replaced as a whole.
+FOOTER_LINE = re.compile(
+    r"^(mit\s+)?(freundlich|kollegial|beste)\w*\s+gr(ü|u)(ß|ss)"
+    r"|^(ober|fach|assistenz|chef)(arzt|ärztin)\b"
+    r"|(elektronisch|digital)\w*\s+(signiert|unterschrieben|freigegeben)"
+    r"|^seite\s+\d+\s*(von|/)\s*\d+",
+    re.I,
+)
+# "Dr. med. ..." starts a signature on a short line without a full stop at the end, unlike a
+# sentence such as "Dr. X telefonisch informiert."
+SIGNATURE_NAME = re.compile(r"^(prof\.|pd\b|priv\.-doz\.|dr\.)", re.I)
+
+
+def _is_footer(line: str, top: str | None) -> bool:
+    """Whether the report text ends before this line. Only from the findings on: a doctor named in
+    the clinical question is the referrer. A name line alone counts only in the assessment;
+    after the findings a signature starts with the greeting."""
+    if top is None or not (is_findings(top) or top.lower() == "beurteilung"):
+        return False
+    if FOOTER_LINE.search(line):
+        return True
+    return (top.lower() == "beurteilung" and bool(SIGNATURE_NAME.match(line))
+            and len(line.split()) <= 8 and not line.endswith("."))
+
+
+# A full stop that does not end the sentence: "ca. 3 mm", "li. Unterlappen", "V.a. Metastase"
+ABBREVIATIONS = {
+    "ca", "bzw", "vgl", "ggf", "evtl", "inkl", "max", "min", "li", "re", "bds", "pat", "dr", "prof",
+    "nr", "abb", "st", "seg", "lk", "ggü", "insb", "mind", "jew", "entspr", "bzgl", "sog", "ehem",
+}
+# A full stop, ! or ? followed by the start of a new sentence
+SENTENCE_END = re.compile(r"[.!?](?=\s+[\"„(]?[A-ZÄÖÜ0-9])")
 
 # Body regions of a whole-body CT report. Radiologists format these inconsistently — with or
 # without a colon, with or without a blank line before — so they are recognised by name.
@@ -153,8 +189,14 @@ def parse(report: str) -> list[Section]:
             add((top,), [line], _label_len(line) if inline_top and not top_match else len(line))
             continue
 
-        # Before the findings, and inside the assessment, there is nothing to subdivide.
-        if top is None or top.lower() == "beurteilung":
+        if _is_footer(stripped, top):
+            flush_pending()
+            top, region = FOOTER, None
+            add((FOOTER,), [line], 0)
+            continue
+
+        # Before the findings, inside the assessment and in the footer there is nothing to subdivide.
+        if top is None or top.lower() == "beurteilung" or top == FOOTER:
             sections[-1].raw.append(line)
             continue
 
@@ -216,6 +258,33 @@ def parse(report: str) -> list[Section]:
 def render(sections: list[Section]) -> str:
     """Inverse of parse()."""
     return "\n".join(line for section in sections for line in section.raw)
+
+
+def _ends_sentence(text: str, stop: int) -> bool:
+    """Whether the full stop at text[stop] ends a sentence."""
+    words = text[:stop].split()
+    word = words[-1].lstrip("(\"„") if words else ""
+    if word.endswith(")") or re.fullmatch(r"\d+[,.]\d+", word):  # "(Serie 3, Bild 45)." / "12,5."
+        return True
+    if word.isdigit():  # "der 8. Rippe" is an ordinal, "Image 139. Kein ..." ends a sentence
+        return len(words) > 1 and words[-2][:1].isupper()
+    letters = re.sub(r"[^A-Za-zÄÖÜäöüß]", "", word)
+    return "." not in word and word.lower() not in ABBREVIATIONS and len(letters) > 1
+
+
+def sentence_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) of each sentence in text, together covering all of it but the whitespace
+    between sentences. A line break does not end a sentence: in a report copied from a PDF it
+    only wraps one."""
+    cuts = [m.end() for m in SENTENCE_END.finditer(text) if _ends_sentence(text, m.start())]
+    spans, start = [], 0
+    for cut in [*cuts, len(text)]:
+        piece = text[start:cut]
+        if piece.strip():
+            lead = len(piece) - len(piece.lstrip())
+            spans.append((start + lead, start + len(piece.rstrip())))
+        start = cut
+    return spans
 
 
 def tree_text(sections: list[Section], preview: int | None = None) -> str:

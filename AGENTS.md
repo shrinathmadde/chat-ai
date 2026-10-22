@@ -27,7 +27,15 @@ Three services, no monorepo tooling — each has its own dependency file and is 
   The `main()` command-line tools and `DATASET` paths in `report_parser.py` and `router.py` are
   leftovers from that repo.
   `router.targets()` must never offer the Beurteilung to the model: `apply()` overwrites it with
-  the assessment at the end, so anything routed there would silently vanish.
+  the assessment at the end, so anything routed there would silently vanish. Nor the
+  `(Fußzeile)` section that `parse()` starts at a greeting or signature: without it the
+  signature counted as assessment and was overwritten.
+  The model never retypes the report: its sentences are numbered (`S1`, `S2`, … across all
+  sections, `sentence_spans()`), the model names the ones the dictation makes untrue under a
+  schema enum, and `apply()` takes those whole sentences out, all edits of a section in one pass.
+  Quoting the sentences instead let a weaker model quote a whole section and so delete findings
+  that still held. The model still types the dictated `text` itself; it is applied as returned.
+  `edit_log` is stored with the message but never shown in the UI. Tests: `python test_pipeline.py`.
 
 ## 2. Layout
 
@@ -108,9 +116,10 @@ plugins `.eslintrc.cjs` extends are in `front/devDependencies`, so a clean `npm 
 `sh: eslint: command not found`. (`.eslintrc.cjs` is also the pre-flat-config format.) Don't put
 lint in your verification loop until that is fixed, and don't report it as passing.
 
-**There is no test suite and no CI.** `front` has no test script, `back`'s `npm test` is `exit 1`,
-and `.github/` contains only issue templates. So the loop is: build + exercise the change in a
-browser. A passing build is not evidence that behaviour works.
+**There is no test suite for `front`/`back` and no CI.** `front` has no test script, `back`'s
+`npm test` is `exit 1`, and `.github/` contains only issue templates. So the loop is: build +
+exercise the change in a browser. A passing build is not evidence that behaviour works.
+`parser/` has model-free checks: `cd parser && python test_pipeline.py` (plain asserts, no pytest).
 
 `npm i` can rewrite `package-lock.json`. Check `git status` afterwards and keep unrelated lockfile
 churn out of your commit.
@@ -288,6 +297,7 @@ Verified in `back/service.mjs`:
 ## 7. Before you finish
 
 - [ ] `npm run build` clean in `front/` (there is no working lint — see §3)
+- [ ] touched `parser/` → `python test_pipeline.py` passes there
 - [ ] new strings added to both `en.js` and `de.js`
 - [ ] Dexie schema change → version bump + `.upgrade()` backfill, existing version blocks untouched
 - [ ] new persisted Redux key → `whitelist` + `getDefaultState()` (+ a migration if the shape changed)

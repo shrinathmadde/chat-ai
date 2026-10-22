@@ -1,14 +1,19 @@
 """Route the radiologist's dictation into the sections of the previous report.
 
 Pipeline per case:
-  1. parse the previous report into addressed sections        (report_parser.py, no LLM)
+  1. parse the previous report into addressed sections and
+     number its sentences S1, S2, ...                           (report_parser.py, no LLM)
   2. ask the LLM, under a JSON schema, only WHERE each dictated
-     statement goes: replace / append an existing section, or
-     add a new section under an existing parent                 (LLM)
-  3. apply those edits to the parsed report                     (code)
+     statement goes and which sentences (by number) it makes
+     untrue, or which new section it needs                      (LLM)
+  3. apply them: the numbered sentences are taken out, the
+     dictated text stands in place of the first one             (code)
   4. paste the radiologist's assessment into "Beurteilung"      (code, verbatim)
 
-Sections the dictation does not touch never pass through the LLM, so they cannot change.
+Sections the dictation does not touch never pass through the LLM, so they cannot change. In
+the sections it does touch the model retypes nothing: it names whole sentences by number, so
+every other sentence stays exactly as it was. Quoting the sentences instead let a model quote a
+whole section in one go and so delete findings that still held.
 
 Output per case: data/parser_approach/generated/<model>/<Case_N>.json (edits, sections, report)
 
@@ -21,15 +26,11 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import sys
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-
-from chat_ai import ChatAI, ChatAIError  # noqa: E402
-from report_parser import Section, is_findings, parse, render  # noqa: E402
+from chat_ai import ChatAI, ChatAIError
+from report_parser import FOOTER, Section, is_findings, parse, render, sentence_spans
 
 DATASET = Path("data/derived/report_pairs.csv")
 OUT_ROOT = Path("data/parser_approach/generated")
@@ -42,13 +43,19 @@ dem Diktat des Radiologen dem richtigen Abschnitt des Vorbefunds zuzuordnen.
 Du erhältst die Abschnitte des Vorbefunds, jeweils mit Adresse in eckigen Klammern und dem
 aktuellen Text, sowie das Diktat (es enthält nur die Änderungen zur Voruntersuchung).
 
-Mögliche Änderungen:
-- "replace" in "edits": Das Diktat ersetzt eine Aussage des Abschnitts. Gib den vollständigen
-  neuen Text des Abschnitts zurück: alle Sätze, die weiterhin gelten, unverändert, und die
-  ersetzte Aussage durch die Formulierung aus dem Diktat ausgetauscht.
-- "append" in "edits": Die Aussage ist für diesen Abschnitt neu. Gib nur den anzuhängenden Text zurück.
-- "new_sections": Nur wenn kein vorhandener Abschnitt passt. Wähle den übergeordneten Abschnitt
-  und eine passende Überschrift.
+Für jede Änderung in "edits":
+- "section": der Abschnitt, zu dem die Aussage gehört.
+- "replaces": die Nummern (S1, S2, ...) der Sätze des Vorbefunds, die nach dem Diktat nicht
+  mehr zutreffen, auch wenn sie in einem anderen Abschnitt stehen. Das sind insbesondere:
+  * Negativbefunde ("Kein ...", "Keine ...", "Kein Nachweis ...", "unauffällig", "regelrecht"),
+    wenn das Diktat zu diesem Thema nun einen Befund nennt;
+  * frühere Maße, Größenangaben oder Verlaufsangaben ("größenkonstant", "größenregredient")
+    desselben Befunds.
+  Leere Liste, wenn das Diktat keiner Aussage des Vorbefunds widerspricht und nur etwas ergänzt.
+  Sätze, die weiterhin zutreffen, nennst du nicht.
+- "text": die Aussage aus dem Diktat.
+"new_sections": Nur wenn kein vorhandener Abschnitt passt. Wähle den übergeordneten Abschnitt
+und eine passende Überschrift.
 
 Regeln:
 1. Übernimm die Formulierungen aus dem Diktat wörtlich. Formuliere nichts um, fasse nichts zusammen.
@@ -74,22 +81,45 @@ def targets(sections: list[Section]) -> list[Section]:
     """Sections the dictation may be routed into: everything under the findings part.
 
     Never the assessment, not even in a report without a findings heading: apply() replaces
-    it at the end, so a dictated sentence routed there would vanish from the report.
+    it at the end, so a dictated sentence routed there would vanish from the report. Never the
+    footer either. A report without any heading is one section, the header.
     """
-    body = [s for s in sections if s.path[0].lower() != "beurteilung"]
+    body = [s for s in sections if s.path[0].lower() != "beurteilung" and s.path[0] != FOOTER]
     found = [s for s in body if is_findings(s.path[0])]
-    return found or [s for s in body if s.path[0] != sections[0].path[0]]
+    return found or [s for s in body if s.path[0] != sections[0].path[0]] or body
 
 
-def schema(addresses: list[str], parents: list[str]) -> dict:
+def numbered(routable: list[Section]) -> tuple[str, dict[str, tuple[str, int, int]]]:
+    """The listing the model sees, and sentence number -> (section id, start, end) in its text.
+
+    Numbers run through the whole report, so a sentence of another section can be named too.
+    """
+    ids, blocks = {}, []
+    for section in routable:
+        lines = [f"[{section.id}]"]
+        spans = sentence_spans(section.text)
+        if not spans:
+            lines.append("(kein Text)")
+        for start, end in spans:
+            number = f"S{len(ids) + 1}"
+            ids[number] = (section.id, start, end)
+            lines.append(f"{number}: {' '.join(section.text[start:end].split())}")
+        blocks.append("\n".join(lines))
+    return "\n".join(blocks), ids
+
+
+def schema(addresses: list[str], parents: list[str], sentences: list[str]) -> dict:
     edit = {
         "type": "object",
         "properties": {
             "section": {"type": "string", "enum": addresses},
-            "action": {"type": "string", "enum": ["replace", "append"]},
+            # Before "text", so the model decides what no longer holds before it writes.
+            # An empty enum is an invalid schema (HTTP 500), so a report without sentences
+            # gets a number that names nothing.
+            "replaces": {"type": "array", "items": {"type": "string", "enum": sentences or ["S0"]}},
             "text": {"type": "string"},
         },
-        "required": ["section", "action", "text"],
+        "required": ["section", "replaces", "text"],
         "additionalProperties": False,
     }
     new_section = {
@@ -126,32 +156,73 @@ def set_text(section: Section, text: str) -> None:
     label, rest = joined[: section.label_len], joined[section.label_len :]
     trailing = len(section.raw) - len("\n".join(section.raw).rstrip("\n").split("\n"))
     same_line = bool(rest.strip()) and not rest.startswith("\n")
-    if same_line:
+    if same_line and not text:  # every sentence taken out: the heading alone
+        body = label.rstrip(" \t")
+    elif same_line:
         body = label + ("" if label.endswith((" ", "\t")) else " ") + text
     else:
-        body = f"{label}\n{text}" if label else text
+        body = f"{label}\n{text}" if label and text else label or text
     section.raw = body.split("\n") + [""] * trailing
 
 
-def apply(sections: list[Section], routing: dict, assessment: str) -> tuple[list[Section], list[dict]]:
+def rebuild(text: str, spans: list[tuple[str, int, int]], removed: set[str],
+            anchors: dict[str, list[str]], appended: list[str]) -> str:
+    """A section's text without the removed sentences, each edit's text in place of the first
+    sentence it removed there, or after the text when it removed none there."""
+    parts, last = [], 0
+    for number, start, end in spans:
+        separator, last = text[last:start], end
+        if number in anchors:
+            parts.append((separator, " ".join(anchors[number])))
+        elif number not in removed:
+            parts.append((separator, text[start:end]))
+    out = ""
+    for separator, piece in parts:
+        out += (separator if out else "") + piece
+    for piece in appended:
+        out = f"{out} {piece}" if out else piece
+    return out.strip()
+
+
+def apply(sections: list[Section], routing: dict, ids: dict[str, tuple[str, int, int]],
+          assessment: str) -> tuple[list[Section], list[dict]]:
     by_id = {s.id: s for s in sections}
     log = []
+
+    # All edits of a section at once, on its original sentences: two edits that take out the same
+    # sentence then both stand in its place, instead of the second finding it gone
+    plans: dict[str, dict] = {}
+
+    def plan(section_id: str) -> dict:
+        return plans.setdefault(section_id, {"removed": set(), "anchors": {}, "appended": []})
 
     for edit in routing.get("edits", []):
         section = by_id.get(edit["section"])
         if section is None:
             log.append({**edit, "status": "unknown section"})
             continue
-        text = edit["text"].strip()
-        if edit["action"] == "append" and section.text:
-            text = f"{section.text} {text}"
-        set_text(section, text)
-        log.append({**edit, "status": "applied"})
+        chosen = [n for n in dict.fromkeys(edit.get("replaces", [])) if n in ids]
+        for number in chosen:
+            plan(ids[number][0])["removed"].add(number)
+        here = sorted((n for n in chosen if ids[n][0] == section.id), key=lambda n: ids[n][1])
+        if here:
+            plan(section.id)["anchors"].setdefault(here[0], []).append(edit["text"].strip())
+        else:
+            plan(section.id)["appended"].append(edit["text"].strip())
+        elsewhere = len(chosen) - len(here)
+        status = f"replaced {len(here)}" if here else "appended"
+        log.append({**edit, "status": status + (f", removed {elsewhere} in other sections" if elsewhere else "")})
 
+    for section_id, steps in plans.items():
+        section = by_id[section_id]
+        spans = [(n, start, end) for n, (owner, start, end) in ids.items() if owner == section_id]
+        set_text(section, rebuild(section.text, spans, steps["removed"], steps["anchors"], steps["appended"]))
+
+    by_name = {s.id.lower(): s for s in sections}
     for new in routing.get("new_sections", []):
         heading, text = new["heading"].strip().rstrip(":"), new["text"].strip()
         parent = tuple(new["parent"].split(" > "))
-        existing = by_id.get(" > ".join((*parent, heading)))
+        existing = by_name.get(" > ".join((*parent, heading)).lower())
         if existing is not None:  # the model asked for a section that already exists
             set_text(existing, f"{existing.text} {text}".strip())
             log.append({**new, "status": "merged into existing section"})
@@ -160,13 +231,18 @@ def apply(sections: list[Section], routing: dict, assessment: str) -> tuple[list
         blank = [""] if sections[after].raw and sections[after].raw[-1] == "" else []
         section = Section(path=(*parent, heading), raw=[f"{heading}: {text}", *blank], label_len=len(heading) + 2)
         sections.insert(after + 1, section)
-        by_id[section.id] = section
+        by_name[section.id.lower()] = section
         log.append({**new, "status": "added"})
 
     verdict = next((s for s in sections if s.path[0].lower() == "beurteilung"), None)
-    if verdict is None:
-        verdict = Section(path=("Beurteilung",), raw=["", "Beurteilung:"], label_len=len("\nBeurteilung:"))
-        sections.append(verdict)
+    if verdict is None:  # a new one, before the signature if there is one
+        footer = next((i for i, s in enumerate(sections) if s.path[0] == FOOTER), len(sections))
+        # one blank line before it: the section above may end with one already
+        above = sections[footer - 1].raw if footer else []
+        head = ["Beurteilung:"] if above and above[-1] == "" else ["", "Beurteilung:"]
+        raw = [*head, ""] if footer < len(sections) else head
+        verdict = Section(path=("Beurteilung",), raw=raw, label_len=len("\n".join(head)))
+        sections.insert(footer, verdict)
     set_text(verdict, assessment.strip())
     return sections, log
 
@@ -174,9 +250,11 @@ def apply(sections: list[Section], routing: dict, assessment: str) -> tuple[list
 def run_case(client: ChatAI, model: str, row: dict, max_tokens: int) -> dict:
     sections = parse(row["pre_report"])
     routable = targets(sections)
+    if not routable:
+        raise ValueError("the previous report has no findings to update")
     addresses = [s.id for s in routable]
-    parents = [s.id for s in routable if len(s.path) <= 2]
-    listing = "\n".join(f"[{s.id}]\n{s.text or '(kein Text)'}" for s in routable)
+    parents = [s.id for s in routable if len(s.path) <= 2] or addresses[:1]
+    listing, ids = numbered(routable)
 
     result = client.complete(
         model=model,
@@ -184,7 +262,7 @@ def run_case(client: ChatAI, model: str, row: dict, max_tokens: int) -> dict:
         user=USER_TEMPLATE.format(sections=listing, delta=row["delta_report"]),
         temperature=0.0,
         max_tokens=max_tokens,
-        response_format=schema(addresses, parents),
+        response_format=schema(addresses, parents, list(ids)),
     )
     record = {
         "case_id": row["case_id"],
@@ -199,7 +277,7 @@ def run_case(client: ChatAI, model: str, row: dict, max_tokens: int) -> dict:
     except json.JSONDecodeError as error:
         return {**record, "error": f"invalid JSON: {error}"}
 
-    edited, log = apply(sections, routing, row["delta_assessment"])
+    edited, log = apply(sections, routing, ids, row["delta_assessment"])
     return {
         **record,
         "routing": routing,
@@ -244,11 +322,9 @@ def main() -> None:
                 if record.get("error"):
                     print(f"  {record['case_id']:<12} FAILED  {record['error'][:90]}")
                     continue
-                statuses = [e["status"] for e in record["edit_log"]]
                 print(
                     f"  {record['case_id']:<12} {len(record['routing']['edits'])} edits, "
                     f"{len(record['routing']['new_sections'])} new  {record['latency_s']:>6.1f}s"
-                    f"{'  ' + str(statuses) if any(s != 'applied' for s in statuses) else ''}"
                 )
 
 

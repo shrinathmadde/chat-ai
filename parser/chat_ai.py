@@ -28,8 +28,17 @@ REASONING_MODELS = {
 }
 
 
+# Longest wait before retrying after HTTP 429. The key's limits are per minute, hour, day and
+# month; only the minute limit is worth waiting for inside one request.
+RATE_LIMIT_WAIT_S = 60
+
+
 class ChatAIError(RuntimeError):
     pass
+
+
+class RequestRejected(ChatAIError):
+    """HTTP 4xx other than 429: asking again gets the same answer."""
 
 
 @dataclass
@@ -97,15 +106,23 @@ class ChatAI:
 
         last_error: Exception | None = None
         for attempt in range(self.max_retries):
-            started = time.time()
+            if attempt:
+                time.sleep(wait)
+            started, wait = time.time(), 2 ** attempt
             try:
                 response = self.session.post(
                     f"{self.base_url}/chat/completions", json=payload, timeout=self.timeout
                 )
-                # 429/5xx are transient on the shared cluster; back off and retry.
+                # 429/5xx are transient on the shared cluster; back off and retry. After a 429
+                # wait as long as the gateway says the limit lasts, but not more than a minute.
                 if response.status_code == 429 or response.status_code >= 500:
+                    if response.status_code == 429:
+                        reset = response.headers.get("Retry-After") or response.headers.get("RateLimit-Reset")
+                        wait = min(int(reset), RATE_LIMIT_WAIT_S) if (reset or "").isdigit() else RATE_LIMIT_WAIT_S
                     raise ChatAIError(f"HTTP {response.status_code}: {response.text[:200]}")
-                response.raise_for_status()
+                # Any other error is the request's own and comes back the same if repeated
+                if response.status_code >= 400:
+                    raise RequestRejected(f"{model}: HTTP {response.status_code}: {response.text[:200]}")
                 data = response.json()
                 choice = data["choices"][0]
                 message = choice["message"]
@@ -117,9 +134,9 @@ class ChatAI:
                     usage=data.get("usage", {}),
                     latency_s=round(time.time() - started, 2),
                 )
+            except RequestRejected:
+                raise
             except (requests.RequestException, ChatAIError, KeyError, ValueError) as error:
                 last_error = error
-                if attempt < self.max_retries - 1:
-                    time.sleep(2**attempt)
 
         raise ChatAIError(f"{model}: failed after {self.max_retries} attempts — {last_error}")
