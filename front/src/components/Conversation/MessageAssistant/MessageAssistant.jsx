@@ -15,6 +15,7 @@ import ForkButton from "./ForkButton";
 import SpeakButton from "./SpeakButton";
 import ReportEditor from "./ReportEditor";
 import ReportFeedbackButton from "./ReportFeedbackButton";
+import ReportPdfButton from "./ReportPdfButton";
 import { baselineIndex } from "../../../utils/radiologyInputs";
 
 // Constants
@@ -406,12 +407,19 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
                   )}  
                 </div>
 
-                {isReport && reportFeedbackModule && (
-                  <ReportFeedbackButton
-                    message={message}
-                    inputs={reportInputs}
-                    onChange={handleReportFeedback}
-                  />
+                {/* Kept clear of the undo button, which floats over the
+                    bottom right corner of the conversation */}
+                {isReport && (
+                  <div className="flex items-center gap-4 pr-12">
+                    <ReportPdfButton text={content} />
+                    {reportFeedbackModule && (
+                      <ReportFeedbackButton
+                        message={message}
+                        inputs={reportInputs}
+                        onChange={handleReportFeedback}
+                      />
+                    )}
+                  </div>
                 )}
                 {/* Not on reports: they send the conversation, report
                     included, to the API gateway as a chat request */}

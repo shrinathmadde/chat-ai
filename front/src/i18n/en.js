@@ -643,6 +643,14 @@ export default {
       "Click into the report to edit it. Changes are saved when you click outside the text.",
     review_hint:
       "Read-only view. Struck-through text was removed and is not part of the report.",
+    // The report as a PDF to send on
+    pdf: {
+      button: "Download PDF",
+      button_hint: "Download the report as shown here, with your edits, as a PDF",
+      file_name: "report",
+      page: "Page {{page}} of {{pages}}",
+      failed: "The PDF could not be created. Please try again.",
+    },
     // Sharing a report for evaluation (modules.radiologyFeedback)
     feedback: {
       button: "Feedback",

@@ -200,6 +200,12 @@ Files attached to a radiology input (`modals/Chat/ReportInputModal.jsx`) are rea
 `apis/processFile.jsx` / `/documents`: that uploads the file and returns Markdown, while the
 pipeline needs the report's own lines.
 
+`ReportPdfButton.jsx` under a report downloads its `content[0].text` as a PDF, built in the browser
+by `utils/reportPdf.js` (jsPDF), so nothing is sent. jsPDF's built-in fonts garble a whole line
+that contains a character outside WinAnsi (`≤`, `≥`, `→`), so `assets/fonts/LiberationMono-Regular.ttf`
+is embedded (fetched on the first export). It is monospaced on purpose: some reports align
+measurement tables with spaces, and the editor shows them monospaced too.
+
 Data is normalised across `conversations → messages → content_items`, with `files_meta` /
 `files_data` holding attachment bytes keyed by `fileId`; `hydrateConversation()` joins them back
 into the nested shape the UI uses. Raw table access (`db.messages`, `db.content_items`, …) appears

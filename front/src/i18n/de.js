@@ -649,6 +649,14 @@ export default {
       "Klicken Sie in den Befund, um ihn zu bearbeiten. Änderungen werden gespeichert, sobald Sie außerhalb des Textes klicken.",
     review_hint:
       "Nur Ansicht. Durchgestrichener Text wurde entfernt und ist nicht Teil des Befunds.",
+    // The report as a PDF to send on
+    pdf: {
+      button: "PDF herunterladen",
+      button_hint: "Den Befund wie hier angezeigt, mit Ihren Änderungen, als PDF herunterladen",
+      file_name: "Befund",
+      page: "Seite {{page}} von {{pages}}",
+      failed: "Das PDF konnte nicht erstellt werden. Bitte versuchen Sie es erneut.",
+    },
     // Sharing a report for evaluation (modules.radiologyFeedback)
     feedback: {
       button: "Feedback",
