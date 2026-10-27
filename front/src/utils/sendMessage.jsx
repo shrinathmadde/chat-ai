@@ -559,19 +559,23 @@ const sendMessage = async ({
         // setting a normal chat completion would use
         const model = localState.settings.model;
         const modelId = typeof model === "string" ? model : model?.id;
+        const reasoning = getReasoningParams(modelId, localState.settings);
         const report = await generateRadiologyReport({
           ...buildReportRequest(radiologyInputs),
           model: modelId,
-          reasoning: getReasoningParams(modelId, localState.settings),
+          reasoning,
         });
         responseContent = [{ type: "text", text: report.report }];
         usage = report.usage;
         // The report can be edited afterwards; `generated` keeps the model's
         // version so the editor can restore it. `assessment_generated`: no
-        // assessment was given, the model updated the previous one.
+        // assessment was given, the model updated the previous one. `model`
+        // and `reasoning` go with a shared report (ReportFeedbackButton).
         radiologyMeta = {
           edit_log: report.edit_log,
           generated: report.report,
+          model: modelId,
+          reasoning,
           ...(report.assessment_generated ? { assessment_generated: true } : {}),
         };
       } else {

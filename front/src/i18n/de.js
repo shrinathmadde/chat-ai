@@ -649,6 +649,41 @@ export default {
       "Klicken Sie in den Befund, um ihn zu bearbeiten. Änderungen werden gespeichert, sobald Sie außerhalb des Textes klicken.",
     review_hint:
       "Nur Ansicht. Durchgestrichener Text wurde entfernt und ist nicht Teil des Befunds.",
+    // Sharing a report for evaluation (modules.radiologyFeedback)
+    feedback: {
+      button: "Feedback",
+      button_hint: "Diesen Befund und Ihr Feedback zur Auswertung teilen",
+      shared: "Geteilt",
+      shared_outdated: "Geteilt – seitdem bearbeitet",
+      title: "Befund zur Auswertung teilen",
+      intro:
+        "Befunde werden normalerweise nie gespeichert. Wenn Sie dieses Formular senden, wird zur Auswertung und Verbesserung der Befunderstellung auf unserem Server gespeichert: die Eingaben (Vorbefund, Diktat, Beurteilung), der generierte Befund, der Befund mit Ihren Änderungen und Ihr Feedback unten. Über Sie wird nichts gespeichert. Sie können das Teilen hier jederzeit zurückziehen.",
+      outdated_hint:
+        "Sie haben den Befund nach dem Teilen bearbeitet. Erneut senden, um die gespeicherte Kopie durch die aktuelle Fassung zu ersetzen.",
+      rating: "Gesamteindruck",
+      good: "Guter Befund",
+      bad: "Befund hat Probleme",
+      comment: "Anmerkungen und Vorschläge",
+      comment_placeholder:
+        "Was war falsch oder fehlte, und was ginge besser? Tippen oder diktieren …",
+      show_data: "Alles anzeigen, was gespeichert wird",
+      generated_report: "Generierter Befund",
+      final_report: "Befund mit Ihren Änderungen",
+      none_given: "(keine angegeben – vom Modell geschrieben)",
+      not_available: "(für diesen Befund nicht verfügbar)",
+      data_also:
+        "Außerdem gespeichert: das Modell ({{model}}), seine Reasoning-Einstellung, die Liste der Änderungen des Modells und die App-Version.",
+      consent:
+        "Ich bin einverstanden, dass dieser Befund, seine Eingaben und mein Feedback zur Auswertung auf dem Server gespeichert werden.",
+      withdraw: "Zurückziehen und vom Server löschen",
+      send: "Senden",
+      send_again: "Erneut senden",
+      sending: "Wird gesendet …",
+      sent: "Vielen Dank! Der Befund wurde geteilt.",
+      withdrawn: "Der geteilte Befund wurde vom Server gelöscht.",
+      failed: "Das Feedback konnte nicht gesendet werden: {{error}}",
+      withdraw_failed: "Der Befund konnte nicht zurückgezogen werden: {{error}}",
+    },
   },
   no_access: {
     title: "Kein Zugriff",

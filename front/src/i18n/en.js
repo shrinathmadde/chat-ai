@@ -643,6 +643,41 @@ export default {
       "Click into the report to edit it. Changes are saved when you click outside the text.",
     review_hint:
       "Read-only view. Struck-through text was removed and is not part of the report.",
+    // Sharing a report for evaluation (modules.radiologyFeedback)
+    feedback: {
+      button: "Feedback",
+      button_hint: "Share this report and your feedback for evaluation",
+      shared: "Shared",
+      shared_outdated: "Shared – edited since",
+      title: "Share report for evaluation",
+      intro:
+        "Reports are normally never stored. If you send this form, the following is stored on our server to evaluate and improve the report generation: the inputs (previous report, dictation, assessment), the generated report, the report with your edits, and your feedback below. Nothing about you is stored. You can withdraw it here at any time.",
+      outdated_hint:
+        "You edited the report after sharing it. Send again to replace the stored copy with the current version.",
+      rating: "Overall",
+      good: "Good report",
+      bad: "Report has problems",
+      comment: "Comments and suggestions",
+      comment_placeholder:
+        "What was wrong or missing, and what could be better? Type or dictate …",
+      show_data: "Show everything that will be stored",
+      generated_report: "Generated report",
+      final_report: "Report with your edits",
+      none_given: "(none given – written by the model)",
+      not_available: "(not available for this report)",
+      data_also:
+        "Also stored: the model ({{model}}), its reasoning setting, the list of the model's edits and the app version.",
+      consent:
+        "I agree that this report, its inputs and my feedback are stored on the server for evaluation.",
+      withdraw: "Withdraw and delete from the server",
+      send: "Send",
+      send_again: "Send again",
+      sending: "Sending …",
+      sent: "Thank you! The report was shared.",
+      withdrawn: "The shared report was deleted from the server.",
+      failed: "The feedback could not be sent: {{error}}",
+      withdraw_failed: "The report could not be withdrawn: {{error}}",
+    },
   },
   no_access: {
     title: "No access",

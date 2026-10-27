@@ -62,6 +62,7 @@ try {
         process.env["VITE_MODULE_CHOICES"] = value?.choices  || false;
         process.env["VITE_MODULE_SPEECH"] = JSON.stringify(value?.speech) || false;
         process.env["VITE_MODULE_RADIOLOGY"] = value?.radiology || false;
+        process.env["VITE_MODULE_RADIOLOGY_FEEDBACK"] = value?.radiologyFeedback || false;
       } catch (e) {
         console.log("Error while parsing modules: ", e)
       }

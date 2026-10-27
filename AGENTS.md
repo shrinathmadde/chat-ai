@@ -36,6 +36,9 @@ Three services, no monorepo tooling — each has its own dependency file and is 
   Quoting the sentences instead let a weaker model quote a whole section and so delete findings
   that still held. The model still types the dictated `text` itself; it is applied as returned.
   `edit_log` is stored with the message but never shown in the UI. Tests: `python test_pipeline.py`.
+  `feedback_store.py` is the only place report text is written to disk: reports a radiologist
+  shares for evaluation, in the SQLite file at `radiologyFeedbackPath` (see §4.8).
+  Tests: `python test_feedback.py`.
 
 ## 2. Layout
 
@@ -53,8 +56,10 @@ front/src/
   i18n/           en.js, de.js
   utils/          sendMessage, conversationUtils, attachments, appContext, tabChangeSync
 back/service.mjs  POST /documents, GET /models, GET /user, POST /audio/speech,
-                  POST /audio/transcriptions, POST /chat/completions, POST /radiology/report
-parser/app.py     POST /report (radiology report pipeline, 127.0.0.1:8082)
+                  POST /audio/transcriptions, POST /chat/completions, POST /radiology/report,
+                  POST /radiology/feedback, DELETE /radiology/feedback/:id
+parser/app.py     POST /report (radiology report pipeline, 127.0.0.1:8082),
+                  POST /feedback, DELETE /feedback/{id} (shared reports, feedback_store.py)
 secrets/          front.json + back.json (gitignored; *.sample committed)
 ```
 
@@ -119,7 +124,9 @@ lint in your verification loop until that is fixed, and don't report it as passi
 **There is no test suite for `front`/`back` and no CI.** `front` has no test script, `back`'s
 `npm test` is `exit 1`, and `.github/` contains only issue templates. So the loop is: build +
 exercise the change in a browser. A passing build is not evidence that behaviour works.
-`parser/` has model-free checks: `cd parser && python test_pipeline.py` (plain asserts, no pytest).
+`parser/` has model-free checks: `cd parser && python test_pipeline.py && python test_feedback.py`
+(plain asserts, no pytest). `httpx` is not installed, so FastAPI's `TestClient` can't be used;
+`test_feedback.py` calls the route functions directly.
 
 `npm i` can rewrite `package-lock.json`. Check `git status` afterwards and keep unrelated lockfile
 churn out of your commit.
@@ -172,7 +179,18 @@ pastes it in place of `ASSESSMENT_SLOT`, and returns `assessment_generated`, kep
 `meta.radiology` for the editor's check notice. The answer is shown in
 `MessageAssistant/ReportEditor.jsx`, edited in place in its `content[0].text`, with changes against
 the baseline input highlighted by `utils/reportDiff.js`; `meta.radiology.generated` keeps the model's
-version for "restore". Its highlight layer keeps every piece of text alone in a `<span>`: loose text
+version for "restore", and `model` / `reasoning` record what produced it, because the
+conversation's model can change afterwards.
+
+With `modules.radiologyFeedback`, `ReportFeedbackButton.jsx` under a report opens
+`modals/Chat/ReportFeedbackModal.jsx`: thumbs up/down, one dictatable comment box, a
+view of everything that will be stored, and a consent checkbox. Nothing is sent before the radiologist
+ticks it and presses Send. The record id is a browser-generated UUID kept in
+`meta.radiology.feedback` (`{ id, rating, comment, report }`, `report` = the text as
+sent): sending again replaces the stored row, and the id is the only key to withdraw it, since nothing
+about the user is stored. The general `FeedbackButtons` are hidden on reports, because they send the
+conversation as a chat request to the upstream gateway. The report editor's highlight layer keeps
+every piece of text alone in a `<span>`: loose text
 nodes there get merged or wrapped by browser extensions (Grammarly), and React's next update then
 throws `removeChild … not a child` and blanks the whole page.
 
@@ -214,7 +232,8 @@ restart. Read values via `import.meta.env.VITE_*`; they arrive as strings, hence
 `=== "true"` comparisons.
 
 Feature modules are gated this way — `VITE_MODULE_TOOLS`, `VITE_MODULE_FEEDBACK`,
-`VITE_MODULE_CHOICES`, `VITE_MODULE_RADIOLOGY`, `VITE_MODULE_SPEECH` (JSON, with `model` and `voice`). A deployment can
+`VITE_MODULE_CHOICES`, `VITE_MODULE_RADIOLOGY`, `VITE_MODULE_RADIOLOGY_FEEDBACK`
+(`modules.radiologyFeedback`), `VITE_MODULE_SPEECH` (JSON, with `model` and `voice`). A deployment can
 switch these parts of the UI off, so new code in those areas must still behave with the flag off.
 
 ### 4.6 Model capabilities are data, not code
@@ -260,6 +279,12 @@ Verified in `back/service.mjs`:
   `inference-id` fallback does not reach it. The thinking setting travels as `reasoning`, built by
   `config/getReasoningParams.jsx` exactly as for chat completions; without it the model uses its own
   default (thinking on for Qwen), which made reports 30–50× slower.
+- **`/radiology/feedback` stores patient data, so it has two switches.** `back` forwards it to
+  `parser`, which returns 503 while `radiologyFeedbackPath` in `back.json` is empty. The button is
+  shown only with `modules.radiologyFeedback` in `front.json`. A relative path resolves against
+  `parser/` both natively and in Docker (bind mount), so use `data/...`: `parser/data/` is in
+  `.gitignore` and `parser/.dockerignore`. The file is created `0600`, so in Docker it is root's
+  and reading it on the host needs `sudo`.
 
 ## 5. Conventions
 
@@ -297,7 +322,7 @@ Verified in `back/service.mjs`:
 ## 7. Before you finish
 
 - [ ] `npm run build` clean in `front/` (there is no working lint — see §3)
-- [ ] touched `parser/` → `python test_pipeline.py` passes there
+- [ ] touched `parser/` → `python test_pipeline.py` and `python test_feedback.py` pass there
 - [ ] new strings added to both `en.js` and `de.js`
 - [ ] Dexie schema change → version bump + `.upgrade()` backfill, existing version blocks untouched
 - [ ] new persisted Redux key → `whitelist` + `getDefaultState()` (+ a migration if the shape changed)

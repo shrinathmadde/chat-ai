@@ -2,6 +2,8 @@
 
     POST /report  {previous_report, dictation, assessment?, model, reasoning?}
                -> {report, edit_log, sections, usage, assessment_generated}
+    POST /feedback         a report the radiologist shares for evaluation (see Feedback)
+    DELETE /feedback/{id}  withdraws it
 
 `reasoning` carries the same thinking settings the front end sends with a normal chat
 completion ({reasoning_effort?, chat_template_kwargs?}), so the thinking toggle applies here too.
@@ -17,7 +19,9 @@ report_parser.py, router.py and chat_ai.py started as copies from the research r
 umg-radiology-report-formatter, but this directory is the main code now: change them here.
 
 Reads apiEndpoint and apiKey from back.json, like the back service.
-Patient data: report text is never logged and never written to disk.
+Patient data: report text is never logged and never written to disk, except a report the
+radiologist explicitly shares through /feedback, stored by feedback_store.py at
+radiologyFeedbackPath (back.json; feedback is refused while it is unset).
 
 Usage (from this directory):
     pip install -r requirements.txt
@@ -30,13 +34,16 @@ import json
 import logging
 import os
 import re
+import sqlite3
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+import feedback_store
 from chat_ai import ChatAI, ChatAIError, Completion
 from report_parser import parse
 from router import run_case, targets
@@ -59,6 +66,9 @@ API_KEY = config.get("apiKey") or ""
 API_ENDPOINT = config.get("apiEndpoint") or None  # None: chat_ai's default endpoint
 if not API_KEY:
     log.warning("No apiKey in %s: report requests will be refused.", CONFIG_LOCATION)
+# SQLite file for shared reports; a relative path is taken from the working directory, which
+# is this directory both natively and in the container (bind-mounted), so data/... lands here
+FEEDBACK_PATH = config.get("radiologyFeedbackPath") or ""
 
 app = FastAPI(title="Chat AI report pipeline")
 
@@ -75,6 +85,24 @@ class ReportRequest(BaseModel):
     assessment: str = ""  # empty: the model updates the previous assessment
     model: str
     reasoning: Reasoning | None = None
+
+
+class Feedback(BaseModel):
+    """One shared report: its inputs, both versions of the report and the radiologist's view."""
+    # Generated in the browser (crypto.randomUUID), the only key to replace or withdraw the row
+    id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    rating: Literal[1, -1] | None = None
+    comment: str = ""
+    previous_report: str
+    dictation: str
+    assessment: str = ""
+    generated_report: str | None = None
+    final_report: str
+    assessment_generated: bool = False
+    edit_log: list | None = None
+    model: str
+    reasoning: dict | None = None
+    app_version: str = ""
 
 
 # The model keeps the previous assessment's form but never its course judgement. It updates the
@@ -242,3 +270,31 @@ def report(request: ReportRequest) -> dict:
         **{key: result[key] for key in ("report", "edit_log", "sections", "usage")},
         "assessment_generated": generate,
     }
+
+
+def require_feedback_path() -> None:
+    if not FEEDBACK_PATH:
+        raise HTTPException(503, "Report feedback is not enabled (radiologyFeedbackPath in back.json).")
+
+
+@app.post("/feedback")
+def feedback(request: Feedback) -> dict:
+    require_feedback_path()
+    try:
+        feedback_store.save(FEEDBACK_PATH, request.model_dump())
+    except (OSError, sqlite3.Error) as error:
+        log.error("Feedback not stored: %s", type(error).__name__)
+        raise HTTPException(500, "The feedback could not be stored.") from None
+    return {"id": request.id}
+
+
+@app.delete("/feedback/{feedback_id}")
+def withdraw_feedback(feedback_id: str) -> dict:
+    # Withdrawing twice is not an error: either way the report is no longer stored
+    require_feedback_path()
+    try:
+        deleted = feedback_store.delete(FEEDBACK_PATH, feedback_id)
+    except (OSError, sqlite3.Error) as error:
+        log.error("Feedback not withdrawn: %s", type(error).__name__)
+        raise HTTPException(500, "The feedback could not be withdrawn.") from None
+    return {"id": feedback_id, "deleted": deleted}

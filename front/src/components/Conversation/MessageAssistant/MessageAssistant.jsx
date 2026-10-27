@@ -14,6 +14,7 @@ import FeedbackButtons from "./FeedbackButtons";
 import ForkButton from "./ForkButton";
 import SpeakButton from "./SpeakButton";
 import ReportEditor from "./ReportEditor";
+import ReportFeedbackButton from "./ReportFeedbackButton";
 import { baselineIndex } from "../../../utils/radiologyInputs";
 
 // Constants
@@ -42,6 +43,7 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
   const { forkConversation } = useForkConversation(localState);
   const { confirmAction } = useModal();
   const feedbackModule = import.meta.env.VITE_MODULE_FEEDBACK === "true";
+  const reportFeedbackModule = import.meta.env.VITE_MODULE_RADIOLOGY_FEEDBACK === "true";
 
   //Functions
   const adjustHeight = () => {
@@ -151,6 +153,23 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
       messages[message_index] = {
         ...messages[message_index],
         content: [{ ...content[0], text }, ...content.slice(1)],
+      };
+      return { ...prev, messages, flush: true };
+    });
+  };
+
+  // Keep what was shared of a report with it (undefined once withdrawn),
+  // unless the user has switched conversations
+  const handleReportFeedback = (feedback) => {
+    const conversationId = localState.id;
+    setLocalState((prev) => {
+      if (prev.id !== conversationId) return prev;
+      const messages = [...prev.messages];
+      const current = messages[message_index];
+      const { feedback: _, ...radiology } = current.meta?.radiology ?? {};
+      messages[message_index] = {
+        ...current,
+        meta: { ...current.meta, radiology: feedback ? { ...radiology, feedback } : radiology },
       };
       return { ...prev, messages, flush: true };
     });
@@ -387,7 +406,16 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
                   )}  
                 </div>
 
-                {feedbackModule && (
+                {isReport && reportFeedbackModule && (
+                  <ReportFeedbackButton
+                    message={message}
+                    inputs={reportInputs}
+                    onChange={handleReportFeedback}
+                  />
+                )}
+                {/* Not on reports: they send the conversation, report
+                    included, to the API gateway as a chat request */}
+                {feedbackModule && !isReport && (
                   <FeedbackButtons
                     localState={localState}
                     setLocalState={setLocalState}

@@ -1,2 +1,4 @@
 *.env
 __pycache__/
+# Reports shared for evaluation (radiologyFeedbackPath): patient data
+parser/data/

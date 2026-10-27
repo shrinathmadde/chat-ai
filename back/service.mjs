@@ -390,6 +390,47 @@ app.post("/radiology/report", requireAllowedModel, async (req, res) => {
   }
 });
 
+// Report feedback (modules.radiologyFeedback): a report the radiologist chose
+// to share for evaluation, with its inputs, both versions and their comments,
+// or the withdrawal of one by its id. The parser service stores it (only while
+// radiologyFeedbackPath is set in back.json). Nothing about the user is added,
+// and the content is not logged.
+async function forwardFeedback(res, method, path, body) {
+  if (!radiologyServiceUrl) {
+    return res.status(503).json({
+      error: "The report pipeline is not configured (radiologyServiceUrl in back.json).",
+    });
+  }
+  try {
+    const response = await fetch(radiologyServiceUrl + "/feedback" + path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(30 * 1000),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error("Report feedback failed:", response.status);
+      const error = typeof result.detail === "string"
+        ? result.detail
+        : `Storing the feedback failed (${response.status}).`;
+      return res.status(response.status).json({ error });
+    }
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error in report feedback endpoint:", error.name);
+    res.status(502).json({ error: "The report pipeline is unreachable." });
+  }
+}
+
+app.post("/radiology/feedback", (req, res) =>
+  forwardFeedback(res, "POST", "", req.body)
+);
+
+app.delete("/radiology/feedback/:id", (req, res) =>
+  forwardFeedback(res, "DELETE", "/" + encodeURIComponent(req.params.id))
+);
+
 // Chat Completions API
 app.post("/chat/completions", requireAllowedModel, async (req, res) => {
   const {
