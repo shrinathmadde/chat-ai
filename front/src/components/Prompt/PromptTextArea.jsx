@@ -19,9 +19,12 @@ export default function PromptTextArea({
     handleChange,
     prompt,
     hasReportInputs = false,
+    inputRef,
+    onFocus,
 }) {
   const { t } = useTranslation();
-  const textareaRef = useRef(null);
+  const ownRef = useRef(null);
+  const textareaRef = inputRef ?? ownRef;
   const [isDragging, setIsDragging] = useState(false);
   const { notifySuccess, notifyError } = useToast();
   const { addAttachments, pasteAttachments } = useAttachments();
@@ -132,7 +135,7 @@ export default function PromptTextArea({
         <textarea
             autoFocus
             ref={textareaRef}
-            className={`p-4 md:p-5 transition-opacity duration-300 ease-in-out outline-none text-base w-full dark:text-white text-black bg-white dark:bg-bg_secondary_dark overflow-y-auto ${
+            className={`p-4 md:p-5 transition-opacity duration-300 ease-in-out outline-none text-base w-full dark:text-white text-black bg-white dark:bg-bg_secondary_dark overflow-y-auto data-[dictating]:ring-2 data-[dictating]:ring-inset data-[dictating]:ring-red-400 ${
               choices.length > 0 ? "" : "rounded-t-2xl"
             }`}
             value={prompt}
@@ -153,6 +156,7 @@ export default function PromptTextArea({
               // adjustHeight();
               handleChange(e);
             }}
+            onFocus={onFocus}
             onDragOver={(e) => {e.preventDefault(); }}
             onDragEnter={(e) => {e.preventDefault(); setIsDragging(true);}}
             onDragLeave={(e) => {e.preventDefault(); setIsDragging(false);}}

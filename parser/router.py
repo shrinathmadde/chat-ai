@@ -15,6 +15,9 @@ the sections it does touch the model retypes nothing: it names whole sentences b
 every other sentence stays exactly as it was. Quoting the sentences instead let a model quote a
 whole section in one go and so delete findings that still held.
 
+The dictation goes in word for word, unless the radiologist's instructions (routing_prompts)
+ask otherwise, e.g. to write it out in full sentences.
+
 Output per case: data/parser_approach/generated/<model>/<Case_N>.json (edits, sections, report)
 
 Usage:
@@ -75,6 +78,30 @@ DIKTAT DES RADIOLOGEN (nur Änderungen):
 {delta}
 ---
 """
+
+# Only when the radiologist typed instructions (the text box in the web interface). Without
+# them the prompts are exactly the ones above, so the evaluated behaviour stays as it was.
+# Rule 7 of both prompts: the assessment prompt (app.py) has six rules too.
+INSTRUCTIONS_RULE = (
+    "7. Befolge die HINWEISE DES RADIOLOGEN, auch wenn sie den Regeln oben widersprechen.\n"
+    "   Erfinde aber auch dann nichts.\n"
+)
+
+INSTRUCTIONS_TEMPLATE = """\
+HINWEISE DES RADIOLOGEN:
+---
+{instructions}
+---
+"""
+
+
+def routing_prompts(listing: str, delta: str, instructions: str = "") -> tuple[str, str]:
+    """System and user prompt of the routing call; the instructions only when there are any."""
+    system, user = SYSTEM_PROMPT, USER_TEMPLATE.format(sections=listing, delta=delta)
+    if instructions.strip():
+        system += INSTRUCTIONS_RULE
+        user += "\n" + INSTRUCTIONS_TEMPLATE.format(instructions=instructions.strip())
+    return system, user
 
 
 def targets(sections: list[Section]) -> list[Section]:
@@ -168,18 +195,21 @@ def set_text(section: Section, text: str) -> None:
 def rebuild(text: str, spans: list[tuple[str, int, int]], removed: set[str],
             anchors: dict[str, list[str]], appended: list[str]) -> str:
     """A section's text without the removed sentences, each edit's text in place of the first
-    sentence it removed there, or after the text when it removed none there."""
+    sentence it removed there, or after the text when it removed none there. An edit with an
+    empty text only takes sentences out (asked for in the radiologist's instructions)."""
     parts, last = [], 0
     for number, start, end in spans:
         separator, last = text[last:start], end
         if number in anchors:
-            parts.append((separator, " ".join(anchors[number])))
+            piece = " ".join(t for t in anchors[number] if t)
+            if piece:
+                parts.append((separator, piece))
         elif number not in removed:
             parts.append((separator, text[start:end]))
     out = ""
     for separator, piece in parts:
         out += (separator if out else "") + piece
-    for piece in appended:
+    for piece in filter(None, appended):
         out = f"{out} {piece}" if out else piece
     return out.strip()
 
@@ -255,11 +285,12 @@ def run_case(client: ChatAI, model: str, row: dict, max_tokens: int) -> dict:
     addresses = [s.id for s in routable]
     parents = [s.id for s in routable if len(s.path) <= 2] or addresses[:1]
     listing, ids = numbered(routable)
+    system, user = routing_prompts(listing, row["delta_report"], row.get("instructions", ""))
 
     result = client.complete(
         model=model,
-        system=SYSTEM_PROMPT,
-        user=USER_TEMPLATE.format(sections=listing, delta=row["delta_report"]),
+        system=system,
+        user=user,
         temperature=0.0,
         max_tokens=max_tokens,
         response_format=schema(addresses, parents, list(ids)),

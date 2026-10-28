@@ -35,10 +35,18 @@ Three services, no monorepo tooling — each has its own dependency file and is 
   schema enum, and `apply()` takes those whole sentences out, all edits of a section in one pass.
   Quoting the sentences instead let a weaker model quote a whole section and so delete findings
   that still held. The model still types the dictated `text` itself; it is applied as returned.
+  The radiologist's `instructions` (typed in the prompt box) reach both model calls through
+  `routing_prompts()` / `assessment_prompts()`, which add the instructions block and one rule,
+  `router.INSTRUCTIONS_RULE` (rule 7 of both prompts), saying they override the others; without them both
+  prompts are byte-identical to the evaluated ones, which `test_pipeline.py` checks — keep it so.
+  If instructions seem ignored, try another model: in a test qwen3-30b largely ignored a request
+  to write the dictation out, deepseek-v4-flash followed it. A dictated assessment is still
+  pasted in verbatim.
   `edit_log` is stored with the message but never shown in the UI. Tests: `python test_pipeline.py`.
   `feedback_store.py` is the only place report text is written to disk: reports a radiologist
-  shares for evaluation, in the SQLite file at `radiologyFeedbackPath` (see §4.8).
-  Tests: `python test_feedback.py`.
+  shares for evaluation, in the SQLite file at `radiologyFeedbackPath` (see §4.8). Live files
+  exist, so a new column goes into `SCHEMA` **and** `ADDED_COLUMNS`, which adds it to an old file
+  on connect. Tests: `python test_feedback.py`.
 
 ## 2. Layout
 
@@ -172,7 +180,15 @@ carries over to the next chat unless keyed by `localState.id`.
 A user message with `meta.radiology.inputs` is answered by the report pipeline
 (`apis/generateRadiologyReport.jsx`), not a chat completion: `sendMessage` checks the message
 being sent, so retry takes the same path. Its `content[0].text` is only a readable copy of the
-inputs, which is why its edit button is hidden. The assessment input is optional
+inputs, which is why its edit button is hidden. Text typed in the prompt box alongside the
+inputs is sent as the model's instructions, kept in `meta.radiology.instructions`; attachments
+are refused there, since the pipeline can't use them. So with `modules.radiology` the prompt
+box's mic is not `MicButton` (which attaches audio) but `components/Others/DictationButton.jsx`,
+the one mic for the page: it types the transcript into the text box that last had the cursor —
+the prompt box or a report editor, registered through `hooks/useDictationTarget.js` — at its
+cursor, and outlines that box while it records. Sending is blocked meanwhile, and the button is
+keyed by conversation, so switching chats drops a running recording instead of letting it land
+in another patient's chat. The input and feedback dialogs cover the page and keep their own mic. The assessment input is optional
 (`REPORT_KINDS.assessment.optional`): without it `parser/app.py` runs a second model call in
 parallel with the routing that updates the previous report's assessment (`write_assessment`),
 pastes it in place of `ASSESSMENT_SLOT`, and returns `assessment_generated`, kept in
@@ -279,7 +295,7 @@ Verified in `back/service.mjs`:
   blindly.** A middleware before every route returns 403 when a rule fails. This is only safe
   when the back end is reachable solely through the SSO proxy (`deploy/README.md`).
 - **`/radiology/report` forwards to the `parser` service** at `radiologyServiceUrl` from
-  `back.json`. It returns 503 while that key is unset, and answers in one piece after up to many
+  `back.json`. It copies the request fields one by one, so a new field must be added there too. It returns 503 while that key is unset, and answers in one piece after up to many
   minutes — nothing is streamed — so a proxy in front of `back` needs a long timeout for it.
   `parser` uses `apiKey` from `back.json` and refuses requests when it is empty: the per-user
   `inference-id` fallback does not reach it. The thinking setting travels as `reasoning`, built by

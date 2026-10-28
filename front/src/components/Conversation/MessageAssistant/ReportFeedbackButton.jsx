@@ -8,7 +8,7 @@ import { buildReportRequest } from "../../../utils/radiologyInputs";
 // evaluation (modules.radiologyFeedback). What was shared stays with the
 // report in meta.radiology.feedback: { id, rating, comment, report },
 // `report` being the text as sent, so later edits can be noticed.
-export default function ReportFeedbackButton({ message, inputs, onChange }) {
+export default function ReportFeedbackButton({ message, inputs, instructions, onChange }) {
   const { t } = useTranslation();
   const { openModal } = useModal();
   const radiology = message?.meta?.radiology ?? {};
@@ -19,7 +19,7 @@ export default function ReportFeedbackButton({ message, inputs, onChange }) {
   // Everything stored besides the radiologist's own feedback, as it is now.
   // Clicking here takes the focus from the report editor first, which saves it.
   const buildCase = () => ({
-    ...buildReportRequest(inputs),
+    ...buildReportRequest(inputs, instructions),
     generated_report: radiology.generated ?? null,
     final_report: report,
     assessment_generated: !!radiology.assessment_generated,

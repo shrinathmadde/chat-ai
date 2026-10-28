@@ -5,6 +5,23 @@ import transcribeAudio from "../apis/transcribeAudio";
 import { convertToWav } from "../utils/attachments";
 import { useToast } from "./useToast";
 
+// A space between dictated text and its neighbours, only where two words
+// would otherwise run together.
+const needsSpace = (left, right) =>
+  left !== "" && right !== "" && !/\s$/.test(left) && !/^\s/.test(right);
+
+// The text with the transcript in place of text[start:end] (the cursor or a
+// selection), and the cursor position just behind it
+export function insertTranscript(text, start, end, transcript) {
+  const before = text.slice(0, start);
+  const after = text.slice(end);
+  const inserted =
+    (needsSpace(before, transcript) ? " " : "") +
+    transcript +
+    (needsSpace(transcript, after) ? " " : "");
+  return { text: before + inserted + after, cursor: before.length + inserted.length };
+}
+
 // Dictation for a text field: record from the microphone, then send the whole
 // recording for transcription and pass the text to onText. Neither audio nor
 // text is kept afterwards. status: "idle" → "recording" → "transcribing" → "idle".

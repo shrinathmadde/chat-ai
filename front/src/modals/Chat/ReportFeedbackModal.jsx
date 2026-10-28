@@ -5,32 +5,17 @@ import { ChevronDown, ChevronRight, ThumbsDown, ThumbsUp } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import BaseModal from "../BaseModal";
 import Tooltip from "../../components/Others/Tooltip";
-import { useDictation } from "../../hooks/useDictation";
+import { insertTranscript, useDictation } from "../../hooks/useDictation";
 import { useToast } from "../../hooks/useToast";
 import {
   sendReportFeedback,
   withdrawReportFeedback,
 } from "../../apis/reportFeedback";
 
-// A space between dictated text and its neighbours, only where two words
-// would otherwise run together.
-const needsSpace = (left, right) =>
-  left !== "" && right !== "" && !/\s$/.test(left) && !/^\s/.test(right);
-
 // The text box's text with dictated text where the cursor is, replacing any
 // selection
-function withDictation(textarea, transcript) {
-  const { value, selectionStart, selectionEnd } = textarea;
-  const before = value.slice(0, selectionStart);
-  const after = value.slice(selectionEnd);
-  return (
-    before +
-    (needsSpace(before, transcript) ? " " : "") +
-    transcript +
-    (needsSpace(transcript, after) ? " " : "") +
-    after
-  );
-}
+const withDictation = ({ value, selectionStart, selectionEnd }, transcript) =>
+  insertTranscript(value, selectionStart, selectionEnd, transcript).text;
 
 // Comment box that can also be dictated. Grammarly and the browser's spell
 // check stay out: comments may quote the report.
@@ -163,6 +148,7 @@ export default function ReportFeedbackModal({ isOpen, onClose, feedback, reportC
     ["radiology.previous_report", reportCase.previous_report],
     ["radiology.dictation", reportCase.dictation],
     ["radiology.assessment", reportCase.assessment || t("radiology.feedback.none_given")],
+    ...(reportCase.instructions ? [["radiology.instructions", reportCase.instructions]] : []),
     ["radiology.feedback.generated_report", reportCase.generated_report ?? t("radiology.feedback.not_available")],
     ["radiology.feedback.final_report", reportCase.final_report],
   ];

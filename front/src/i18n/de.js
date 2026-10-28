@@ -579,6 +579,7 @@ export default {
     previous_report: "Vorbefund",
     dictation: "Diktat",
     assessment: "Beurteilung",
+    instructions: "Hinweise",
     modal_title: {
       previous_report: "Vorbefund einfügen",
       dictation: "Diktat einfügen (nur Änderungen)",
@@ -626,13 +627,14 @@ export default {
     no_speech: "Es wurde keine Sprache erkannt.",
     edit: "Klicken zum Ansehen oder Bearbeiten",
     remove: "Entfernen",
-    note_placeholder: "Senden, um den Befund zu erstellen",
+    note_placeholder:
+      "Optional: Hinweise an das Modell, z. B. „Diktat in ganzen Sätzen ausformulieren“. Befunde gehören ins Diktat. Senden, um den Befund zu erstellen.",
     baseline_hint:
       "Nur der zuletzt hinzugefügte Vorbefund ({{label}}) wird verwendet; die anderen werden ignoriert.",
     not_used: "Nicht verwendet",
     missing_inputs: "Für den Befund fehlt noch: {{inputs}}",
-    inputs_only:
-      "Getippter Text und Anhänge können nicht zusammen mit den Befund-Eingaben gesendet werden. Bitte entfernen oder nach dem Befund senden.",
+    attachments_with_inputs:
+      "Anhänge können nicht zusammen mit den Befund-Eingaben gesendet werden. Bitte entfernen oder nach dem Befund senden. Eine Datei für den Befund fügen Sie im Dialog für Vorbefund, Diktat oder Beurteilung hinzu.",
     generating:
       "Befund wird erstellt – mit großen Modellen kann das einige Minuten dauern.",
     show_inputs: "Eingaben anzeigen",
@@ -665,7 +667,7 @@ export default {
       shared_outdated: "Geteilt – seitdem bearbeitet",
       title: "Befund zur Auswertung teilen",
       intro:
-        "Befunde werden normalerweise nie gespeichert. Wenn Sie dieses Formular senden, wird zur Auswertung und Verbesserung der Befunderstellung auf unserem Server gespeichert: die Eingaben (Vorbefund, Diktat, Beurteilung), der generierte Befund, der Befund mit Ihren Änderungen und Ihr Feedback unten. Über Sie wird nichts gespeichert. Sie können das Teilen hier jederzeit zurückziehen.",
+        "Befunde werden normalerweise nie gespeichert. Wenn Sie dieses Formular senden, wird zur Auswertung und Verbesserung der Befunderstellung auf unserem Server gespeichert: die Eingaben (Vorbefund, Diktat, Beurteilung, Ihre Hinweise an das Modell), der generierte Befund, der Befund mit Ihren Änderungen und Ihr Feedback unten. Über Sie wird nichts gespeichert. Sie können das Teilen hier jederzeit zurückziehen.",
       outdated_hint:
         "Sie haben den Befund nach dem Teilen bearbeitet. Erneut senden, um die gespeicherte Kopie durch die aktuelle Fassung zu ersetzen.",
       rating: "Gesamteindruck",

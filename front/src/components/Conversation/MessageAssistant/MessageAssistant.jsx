@@ -34,6 +34,7 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
   // A report from the radiology pipeline is shown in the report editor, with
   // its changes to the previous report (the baseline input) highlighted
   const reportInputs = localState.messages[message_index - 1]?.meta?.radiology?.inputs;
+  const reportInstructions = localState.messages[message_index - 1]?.meta?.radiology?.instructions;
   const isReport = !!reportInputs;
   const previousReport = isReport ? reportInputs[baselineIndex(reportInputs)]?.text : undefined;
   const [renderMode, setRenderMode] = useState("Default");
@@ -416,6 +417,7 @@ export default React.memo(({ localState, setLocalState, message_index }) => {
                       <ReportFeedbackButton
                         message={message}
                         inputs={reportInputs}
+                        instructions={reportInstructions}
                         onChange={handleReportFeedback}
                       />
                     )}

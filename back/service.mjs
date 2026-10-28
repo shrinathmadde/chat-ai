@@ -361,13 +361,14 @@ app.post("/radiology/report", requireAllowedModel, async (req, res) => {
       error: "The report pipeline is not configured (radiologyServiceUrl in back.json).",
     });
   }
-  // reasoning: the thinking settings, as sent with a normal chat completion
-  const { previous_report, dictation, assessment, model, reasoning } = req.body;
+  // reasoning: the thinking settings, as sent with a normal chat completion.
+  // instructions: what the radiologist typed for the model, optional
+  const { previous_report, dictation, assessment, instructions, model, reasoning } = req.body;
   try {
     const response = await fetch(radiologyServiceUrl + "/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ previous_report, dictation, assessment, model, reasoning }),
+      body: JSON.stringify({ previous_report, dictation, assessment, instructions, model, reasoning }),
       signal: AbortSignal.timeout(RADIOLOGY_TIMEOUT_MS),
     });
     const result = await response.json().catch(() => ({}));

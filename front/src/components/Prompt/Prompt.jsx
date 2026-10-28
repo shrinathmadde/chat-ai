@@ -1,9 +1,10 @@
-import { useState, useEffect} from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import AbortButton from "./AbortButton";
 import SendButton from "./SendButton";
 import MicButton from "./MicButton";
+import DictationButton from "../Others/DictationButton";
 import AttachmentsContainer from "./AttachmentsContainer";
 import SettingsButton from "../Header/SettingsButton";
 import WarningExternalModel from "../Header/WarningExternalModel";
@@ -17,6 +18,8 @@ import ReportInputs from "./ReportInputs";
 import { useSendMessage } from "../../hooks/useSendMessage";
 import { useDebounce } from "../../hooks/useDebounce";
 import { useToast } from "../../hooks/useToast";
+import { insertTranscript } from "../../hooks/useDictation";
+import { getDictationTarget, useDictationTarget } from "../../hooks/useDictationTarget";
 import { formatInputs, missingKinds } from "../../utils/radiologyInputs";
 import UndoButton from "../Conversation/UndoButton";
 
@@ -101,15 +104,47 @@ export default function Prompt({
     setPrompt(e.target.value);
     debouncedSave();
   };
-  
+
+  // The mic types into the text box the cursor was in last: this one or a
+  // report (useDictationTarget). The target is fixed when recording starts
+  // and outlined while it records and transcribes.
+  const promptRef = useRef(null);
+  const [dictating, setDictating] = useState(false);
+  const dictationTarget = useRef(null);
+  const handleDictating = (busy) => {
+    setDictating(busy);
+    if (busy && !dictationTarget.current) {
+      dictationTarget.current = getDictationTarget();
+      dictationTarget.current?.element()?.setAttribute("data-dictating", "");
+    } else if (!busy) {
+      dictationTarget.current?.element()?.removeAttribute("data-dictating");
+      dictationTarget.current = null;
+    }
+  };
+  // Dictated text goes where the cursor is, as if typed
+  const insertDictation = (transcript) => {
+    const textarea = promptRef.current;
+    if (!textarea) return;
+    const { text, cursor } = insertTranscript(
+      textarea.value, textarea.selectionStart, textarea.selectionEnd, transcript
+    );
+    setPrompt(text);
+    debouncedSave();
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  };
+  const handlePromptFocus = useDictationTarget(promptRef, insertDictation, { isDefault: true });
+
   // Handle form submission with prompt and files
   const handleSend = async (event, nextPrompt) => {
       event.preventDefault();
+      // The text still being dictated would miss this message
+      if (dictating) return;
       const promptToSend = typeof nextPrompt === "string" ? nextPrompt : prompt;
       if (promptToSend?.trim() === "" && attachments.length === 0 && !hasReportInputs) return;
       if (hasReportInputs) {
-        // The pipeline takes only the three inputs, so nothing typed or
-        // attached may silently go missing
         const missing = missingKinds(reportInputs);
         if (missing.length > 0) {
           notifyError(t("radiology.missing_inputs", {
@@ -117,17 +152,22 @@ export default function Prompt({
           }));
           return;
         }
-        if (promptToSend?.trim() !== "" || attachments.length > 0) {
-          notifyError(t("radiology.inputs_only"));
+        // The pipeline can't use attachments, so they may not silently go
+        // missing; typed text goes along as instructions for the model
+        if (attachments.length > 0) {
+          notifyError(t("radiology.attachments_with_inputs"));
           return;
         }
       }
       debouncedSave.cancel();
       if (hasReportInputs) {
         // The inputs travel in meta; the text is their readable form
-        savePrompt(formatInputs(reportInputs), {
+        const instructions = (promptToSend ?? "").trim();
+        savePrompt(formatInputs(reportInputs, instructions), {
           clearChoices: true,
-          meta: { radiology: { inputs: reportInputs } },
+          meta: {
+            radiology: { inputs: reportInputs, ...(instructions ? { instructions } : {}) },
+          },
         });
         setReportInputs(() => []);
       } else {
@@ -159,8 +199,10 @@ export default function Prompt({
           handleChange={handleChange}
           prompt={prompt}
           hasReportInputs={hasReportInputs}
+          inputRef={promptRef}
+          onFocus={handlePromptFocus}
         />
-        
+
         {/* Buttons Section */}
         <div className="px-3 py-2 w-full h-fit grid grid-cols-[1fr_auto_1fr] items-center bg-white dark:bg-bg_secondary_dark rounded-b-2xl relative">
           {/* Buttons on the left */}
@@ -170,12 +212,24 @@ export default function Prompt({
               localState={localState}
               setLocalState={setLocalState}
             />
-               {/* Mic Button */}
-            <MicButton
-              localState={localState}
-              setLocalState={setLocalState}
-            />
-            
+               {/* Mic Button. With the radiology module it dictates into the
+                   prompt box or a report instead of attaching audio, which the
+                   report pipeline can't use. Keyed by conversation: switching
+                   chats drops a running recording, so it never lands in
+                   another patient's chat. */}
+            {radiologyModule ? (
+              <DictationButton
+                key={conversationId}
+                onText={(transcript) => dictationTarget.current?.insert(transcript)}
+                onBusyChange={handleDictating}
+              />
+            ) : (
+              <MicButton
+                localState={localState}
+                setLocalState={setLocalState}
+              />
+            )}
+
           </div>
           {/* Buttons in the center */}
           <div className="flex gap-4 items-center justify-center">

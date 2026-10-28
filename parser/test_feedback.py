@@ -22,6 +22,7 @@ RECORD = {
     "previous_report": "Befund:\nLunge: Kein Rundherd.\n\nBeurteilung:\n1. Kein Tumornachweis.",
     "dictation": "Neu 12 mm LK paratracheal.",
     "assessment": "",
+    "instructions": "Diktat bitte ausformulieren.",
     "generated_report": "Befund:\nLunge: Kein Rundherd.\n\nBeurteilung:\n1. Kein Tumornachweis.",
     "final_report": "Befund:\nLunge: Kein Rundherd.\nLymphknoten: Neu 12 mm LK paratracheal.\n\nBeurteilung:\n1. Neu LK.",
     "assessment_generated": True,
@@ -70,6 +71,24 @@ def test_missing_optional_values_are_null() -> None:
         feedback_store.save(path, {**RECORD, "rating": None, "generated_report": None, "edit_log": None})
         [row] = rows(path)
         assert row["rating"] is None and row["generated_report"] is None and row["edit_log"] is None
+
+
+def test_file_from_before_instructions_gets_the_column() -> None:
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "feedback.sqlite"
+        old_schema = feedback_store.SCHEMA.replace(
+            "    instructions         TEXT NOT NULL DEFAULT '',  -- the radiologist's, to the model; empty: none\n", "")
+        assert "instructions" not in old_schema
+        connection = sqlite3.connect(path)
+        connection.execute(old_schema)
+        connection.execute(
+            "INSERT INTO feedback VALUES ('old', 'x', 'x', 1, '', 'v', 'd', '', NULL, 'f', 0, NULL, 'm', NULL, '1')")
+        connection.commit()
+        connection.close()
+        feedback_store.save(path, RECORD)
+        by_id = {row["id"]: row for row in rows(path)}
+        assert by_id["old"]["instructions"] == ""
+        assert by_id[ID]["instructions"] == "Diktat bitte ausformulieren."
 
 
 def test_delete_withdraws_only_that_report() -> None:

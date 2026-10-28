@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, RotateCcw } from "lucide-react";
 import { useModal } from "../../../modals/ModalContext";
+import { insertTranscript } from "../../../hooks/useDictation";
+import { useDictationTarget } from "../../../hooks/useDictationTarget";
 import { diffReport } from "../../../utils/reportDiff";
 
 // The highlight layer lies behind a transparent textarea in the same grid
@@ -72,6 +74,29 @@ export default function ReportEditor({ text, previous, generated, assessmentGene
     editing.current = false;
     if (draft !== text) onSave(draft);
   };
+
+  // The mic under the prompt types here once the cursor was in this report
+  // (useDictationTarget). Dictated text goes where the cursor was and is saved
+  // at once: pressing the mic has already ended the edit. If the read-only
+  // view was opened meanwhile, there is no cursor, so it goes at the end.
+  const textareaRef = useRef(null);
+  const insertDictation = (transcript) => {
+    const textarea = textareaRef.current;
+    const { text: next, cursor } = insertTranscript(
+      draft,
+      textarea?.selectionStart ?? draft.length,
+      textarea?.selectionEnd ?? draft.length,
+      transcript
+    );
+    setDraft(next);
+    onSave(next);
+    if (!textarea) return;
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  };
+  const handleDictationFocus = useDictationTarget(textareaRef, insertDictation);
 
   const restore = () =>
     confirmAction(
@@ -159,6 +184,7 @@ export default function ReportEditor({ text, previous, generated, assessmentGene
             {/* Report text is patient data: keep Grammarly out, it checks
                 text on its own servers (and rewrites the page) */}
             <textarea
+              ref={textareaRef}
               value={draft}
               rows={1}
               spellCheck={false}
@@ -167,9 +193,13 @@ export default function ReportEditor({ text, previous, generated, assessmentGene
               data-enable-grammarly="false"
               aria-label={t("radiology.report")}
               onChange={(event) => setDraft(event.target.value)}
-              onFocus={() => (editing.current = true)}
+              onFocus={() => {
+                editing.current = true;
+                handleDictationFocus();
+              }}
               onBlur={save}
-              className={`${TEXT_LAYOUT} h-full w-full resize-none overflow-hidden bg-transparent outline-none`}
+              className={`${TEXT_LAYOUT} h-full w-full resize-none overflow-hidden bg-transparent outline-none
+                       rounded-lg data-[dictating]:ring-2 data-[dictating]:ring-inset data-[dictating]:ring-red-400`}
             />
           </>
         )}

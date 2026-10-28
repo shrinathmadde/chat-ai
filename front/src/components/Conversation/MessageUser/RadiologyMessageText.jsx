@@ -3,13 +3,16 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp } from "@carbon/icons-react";
 import { baselineIndex, getInputLabels } from "../../../utils/radiologyInputs";
 
-// User message made of radiology inputs: lists which inputs went in and shows
-// their text on demand.
+const CHIP = `px-2 py-0.5 rounded-full text-xs font-medium
+  bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200`;
+
+// User message made of radiology inputs: lists which inputs went in, and the
+// instructions typed for the model, and shows their text on demand.
 export default function RadiologyMessageText({ message }) {
   const { t } = useTranslation();
   const [showText, setShowText] = useState(false);
   // Messages from the earlier prompt mode only stored the kinds, as `parts`
-  const { inputs, parts } = message.meta.radiology;
+  const { inputs, parts, instructions } = message.meta.radiology;
   const kinds = inputs ? inputs.map((input) => input.kind) : parts || [];
   const labels = getInputLabels(kinds, t);
   const baseline = inputs ? baselineIndex(inputs) : -1;
@@ -21,14 +24,13 @@ export default function RadiologyMessageText({ message }) {
         {labels.map((label, i) => (
           <span
             key={i}
-            className={`px-2 py-0.5 rounded-full text-xs font-medium
-                     bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200
-                     ${isUnused(i) ? "opacity-50" : ""}`}
+            className={`${CHIP} ${isUnused(i) ? "opacity-50" : ""}`}
             title={isUnused(i) ? t("radiology.not_used") : undefined}
           >
             {label}
           </span>
         ))}
+        {instructions && <span className={CHIP}>{t("radiology.instructions")}</span>}
       </div>
       <button
         className="flex items-center gap-1 text-xs text-tertiary w-fit cursor-pointer"

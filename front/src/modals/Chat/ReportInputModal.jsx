@@ -3,17 +3,12 @@ import { Trans, useTranslation } from "react-i18next";
 import { Attachment, Close, Document, Microphone } from "@carbon/icons-react";
 import BaseModal from "../BaseModal";
 import Tooltip from "../../components/Others/Tooltip";
-import { useDictation } from "../../hooks/useDictation";
+import { insertTranscript, useDictation } from "../../hooks/useDictation";
 import {
   ACCEPTED_FILES,
   MAX_FILE_SIZE_MB,
   readReportFile,
 } from "../../utils/reportFiles";
-
-// A space between dictated text and its neighbours, only where two words
-// would otherwise run together.
-const needsSpace = (left, right) =>
-  left !== "" && right !== "" && !/\s$/.test(left) && !/^\s/.test(right);
 
 const formatDuration = (seconds) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -37,16 +32,14 @@ export default function ReportInputModal({
   // Dictated text goes where the cursor is, replacing any selection
   const insertAtCursor = (transcript) => {
     const textarea = textareaRef.current;
-    const start = textarea?.selectionStart ?? text.length;
-    const end = textarea?.selectionEnd ?? text.length;
-    const before = text.slice(0, start);
-    const after = text.slice(end);
-    const inserted =
-      (needsSpace(before, transcript) ? " " : "") +
-      transcript +
-      (needsSpace(transcript, after) ? " " : "");
-    cursorRef.current = before.length + inserted.length;
-    setText(before + inserted + after);
+    const { text: next, cursor } = insertTranscript(
+      text,
+      textarea?.selectionStart ?? text.length,
+      textarea?.selectionEnd ?? text.length,
+      transcript
+    );
+    cursorRef.current = cursor;
+    setText(next);
   };
   const dictation = useDictation(insertAtCursor);
 

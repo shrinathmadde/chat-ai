@@ -40,13 +40,15 @@ export function missingKinds(inputs) {
   );
 }
 
-// Request body for the pipeline
-export function buildReportRequest(inputs) {
+// Request body for the pipeline. `instructions`: what the radiologist typed in
+// the text box for the model (meta.radiology.instructions), if anything.
+export function buildReportRequest(inputs, instructions = "") {
   const textOf = (kind) => inputs.find((input) => input.kind === kind)?.text || "";
   return {
     previous_report: inputs[baselineIndex(inputs)]?.text || "",
     dictation: textOf("dictation"),
     assessment: textOf("assessment"),
+    instructions,
   };
 }
 
@@ -54,21 +56,22 @@ const HEADINGS = {
   previous_report: "VORBEFUND",
   dictation: "DIKTAT (nur Änderungen)",
   assessment: "BEURTEILUNG (diktiert)",
+  instructions: "HINWEISE AN DAS MODELL",
 };
 
-// Text of the user message: every input with a heading, verbatim. It is what
-// a later normal chat message in this conversation sees as history, and what
-// "Show inputs" and the export show.
-export function formatInputs(inputs) {
+// Text of the user message: every input with a heading, verbatim, then the
+// instructions. It is what a later normal chat message in this conversation
+// sees as history, and what "Show inputs" and the export show.
+export function formatInputs(inputs, instructions = "") {
   const reports = inputs.filter((input) => input.kind === "previous_report").length;
   let reportCount = 0;
-  return inputs
-    .map((input) => {
-      let heading = HEADINGS[input.kind];
-      if (input.kind === "previous_report" && reports > 1) heading += ` ${++reportCount}`;
-      return `${heading}:\n---\n${input.text}\n---`;
-    })
-    .join("\n\n");
+  const blocks = inputs.map((input) => {
+    let heading = HEADINGS[input.kind];
+    if (input.kind === "previous_report" && reports > 1) heading += ` ${++reportCount}`;
+    return `${heading}:\n---\n${input.text}\n---`;
+  });
+  if (instructions) blocks.push(`${HEADINGS.instructions}:\n---\n${instructions}\n---`);
+  return blocks.join("\n\n");
 }
 
 // Chip labels, e.g. "Vorbefund 2". Previous reports are numbered in the order

@@ -574,6 +574,7 @@ export default {
     previous_report: "Previous report",
     dictation: "Dictation",
     assessment: "Assessment",
+    instructions: "Instructions",
     modal_title: {
       previous_report: "Paste previous report",
       dictation: "Paste dictation (changes only)",
@@ -620,13 +621,14 @@ export default {
     no_speech: "No speech was recognised.",
     edit: "Click to view or edit",
     remove: "Remove",
-    note_placeholder: "Send to generate the report",
+    note_placeholder:
+      "Optional: instructions for the model, e.g. “Write the dictation out in full sentences”. Findings belong in the dictation. Send to generate the report.",
     baseline_hint:
       "Only the last added previous report ({{label}}) is used; the others are ignored.",
     not_used: "Not used",
     missing_inputs: "Still missing for the report: {{inputs}}",
-    inputs_only:
-      "Typed text and attachments can't be sent together with the report inputs. Remove them, or send them after the report.",
+    attachments_with_inputs:
+      "Attachments can't be sent together with the report inputs. Remove them, or send them after the report. To use a file for the report, add it in the previous report, dictation or assessment dialog.",
     generating:
       "Generating the report – with large models this can take a few minutes.",
     show_inputs: "Show inputs",
@@ -659,7 +661,7 @@ export default {
       shared_outdated: "Shared – edited since",
       title: "Share report for evaluation",
       intro:
-        "Reports are normally never stored. If you send this form, the following is stored on our server to evaluate and improve the report generation: the inputs (previous report, dictation, assessment), the generated report, the report with your edits, and your feedback below. Nothing about you is stored. You can withdraw it here at any time.",
+        "Reports are normally never stored. If you send this form, the following is stored on our server to evaluate and improve the report generation: the inputs (previous report, dictation, assessment, your instructions to the model), the generated report, the report with your edits, and your feedback below. Nothing about you is stored. You can withdraw it here at any time.",
       outdated_hint:
         "You edited the report after sharing it. Send again to replace the stored copy with the current version.",
       rating: "Overall",

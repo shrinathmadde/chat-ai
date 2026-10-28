@@ -1,6 +1,6 @@
 """Report pipeline service for the radiology module (modules.radiology).
 
-    POST /report  {previous_report, dictation, assessment?, model, reasoning?}
+    POST /report  {previous_report, dictation, assessment?, instructions?, model, reasoning?}
                -> {report, edit_log, sections, usage, assessment_generated}
     POST /feedback         a report the radiologist shares for evaluation (see Feedback)
     DELETE /feedback/{id}  withdraws it
@@ -14,6 +14,9 @@ radiologyServiceUrl in back.json). run_case parses the previous report into sect
 the model only where each dictated sentence belongs, applies those edits in code and pastes
 the assessment in verbatim. Without a dictated assessment, a second call, made at the same
 time, has the model update the previous report's assessment (write_assessment).
+`instructions`, typed by the radiologist, go into both calls and take precedence over their
+wording rules; a dictated assessment is still pasted in verbatim. Without instructions the
+prompts are exactly as evaluated.
 
 report_parser.py, router.py and chat_ai.py started as copies from the research repo
 umg-radiology-report-formatter, but this directory is the main code now: change them here.
@@ -46,7 +49,7 @@ from pydantic import BaseModel, Field
 import feedback_store
 from chat_ai import ChatAI, ChatAIError, Completion
 from report_parser import parse
-from router import run_case, targets
+from router import INSTRUCTIONS_RULE, INSTRUCTIONS_TEMPLATE, run_case, targets
 
 # The slowest models in the evaluation took ~10 min per case. A second attempt covers the
 # transient 429/5xx of the shared cluster without letting one request run for an hour.
@@ -83,6 +86,7 @@ class ReportRequest(BaseModel):
     previous_report: str
     dictation: str
     assessment: str = ""  # empty: the model updates the previous assessment
+    instructions: str = ""  # the radiologist's instructions to the model, empty: none
     model: str
     reasoning: Reasoning | None = None
 
@@ -96,6 +100,7 @@ class Feedback(BaseModel):
     previous_report: str
     dictation: str
     assessment: str = ""
+    instructions: str = ""
     generated_report: str | None = None
     final_report: str
     assessment_generated: bool = False
@@ -150,9 +155,9 @@ DIKTAT DES RADIOLOGEN ZUR AKTUELLEN UNTERSUCHUNG (nur die Änderungen):
 ---
 {dictation}
 ---
-
-Gib jetzt die aktualisierte Beurteilung der aktuellen Untersuchung aus.
 """
+
+ASSESSMENT_REQUEST = "\nGib jetzt die aktualisierte Beurteilung der aktuellen Untersuchung aus.\n"
 
 # run_case pastes the assessment in verbatim, so without one it pastes this, and the updated
 # assessment replaces it afterwards
@@ -170,16 +175,28 @@ def previous_assessment(previous_report: str) -> str:
     return HEADING.sub("", raw).strip()
 
 
-def write_assessment(client: ChatAI, model: str, previous_report: str, dictation: str) -> Completion:
+def assessment_prompts(previous_report: str, dictation: str, instructions: str = "") -> tuple[str, str]:
+    """System and user prompt of the assessment call; the instructions only when there are any."""
+    system = ASSESSMENT_SYSTEM_PROMPT
+    user = ASSESSMENT_USER_TEMPLATE.format(
+        previous_report=previous_report,
+        previous_assessment=previous_assessment(previous_report) or "(keine)",
+        dictation=dictation,
+    )
+    if instructions.strip():
+        system += INSTRUCTIONS_RULE  # as in router.routing_prompts
+        user += "\n" + INSTRUCTIONS_TEMPLATE.format(instructions=instructions.strip())
+    return system, user + ASSESSMENT_REQUEST
+
+
+def write_assessment(client: ChatAI, model: str, previous_report: str, dictation: str,
+                     instructions: str = "") -> Completion:
     """Second call: the updated assessment as plain text, no routing."""
+    system, user = assessment_prompts(previous_report, dictation, instructions)
     return client.complete(
         model=model,
-        system=ASSESSMENT_SYSTEM_PROMPT,
-        user=ASSESSMENT_USER_TEMPLATE.format(
-            previous_report=previous_report,
-            previous_assessment=previous_assessment(previous_report) or "(keine)",
-            dictation=dictation,
-        ),
+        system=system,
+        user=user,
         temperature=0.0,
         max_tokens=MAX_TOKENS,
     )
@@ -209,6 +226,7 @@ def report(request: ReportRequest) -> dict:
         "pre_report": request.previous_report,
         "delta_report": request.dictation,
         "delta_assessment": ASSESSMENT_SLOT if generate else request.assessment,
+        "instructions": request.instructions,
     }
     try:
         reasoning = request.reasoning.model_dump(exclude_none=True) if request.reasoning else {}
@@ -227,7 +245,7 @@ def report(request: ReportRequest) -> dict:
             routed = pool.submit(run_case, client(), request.model, row, MAX_TOKENS)
             written = (
                 pool.submit(write_assessment, client(), request.model, request.previous_report,
-                            request.dictation)
+                            request.dictation, request.instructions)
                 if generate else None
             )
             result = routed.result()

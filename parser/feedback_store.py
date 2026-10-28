@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS feedback (
     previous_report      TEXT NOT NULL,
     dictation            TEXT NOT NULL,
     assessment           TEXT NOT NULL,  -- empty: the model wrote it (assessment_generated)
+    instructions         TEXT NOT NULL DEFAULT '',  -- the radiologist's, to the model; empty: none
     generated_report     TEXT,           -- NULL for reports from before the editor kept it
     final_report         TEXT NOT NULL,  -- with the radiologist's edits
     assessment_generated INTEGER NOT NULL,
@@ -36,9 +37,15 @@ CREATE TABLE IF NOT EXISTS feedback (
 )
 """
 
+# Columns added after the table was first created: files that already exist get them on the
+# next connect. A new column goes in SCHEMA and here.
+ADDED_COLUMNS = (
+    ("instructions", "TEXT NOT NULL DEFAULT ''"),
+)
+
 # Every column the caller sets; id and the timestamps are handled here
 COLUMNS = (
-    "rating", "comment", "previous_report", "dictation", "assessment",
+    "rating", "comment", "previous_report", "dictation", "assessment", "instructions",
     "generated_report", "final_report", "assessment_generated", "edit_log", "model",
     "reasoning", "app_version",
 )
@@ -59,6 +66,10 @@ def connect(path: str | Path) -> sqlite3.Connection:
     file.touch(mode=0o600, exist_ok=True)
     connection = sqlite3.connect(file)
     connection.execute(SCHEMA)
+    present = {row[1] for row in connection.execute("PRAGMA table_info(feedback)")}
+    for name, definition in ADDED_COLUMNS:
+        if name not in present:
+            connection.execute(f"ALTER TABLE feedback ADD COLUMN {name} {definition}")
     return connection
 
 

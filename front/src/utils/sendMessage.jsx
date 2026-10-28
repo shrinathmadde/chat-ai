@@ -212,6 +212,7 @@ const sendMessage = async ({
     const radiologyInputs = radiologyModule
       ? localState.messages.at(-1)?.meta?.radiology?.inputs
       : undefined;
+    const radiologyInstructions = localState.messages.at(-1)?.meta?.radiology?.instructions;
 
     const isExternalModel =
       typeof localState.settings.model?.name === "string" &&
@@ -561,7 +562,7 @@ const sendMessage = async ({
         const modelId = typeof model === "string" ? model : model?.id;
         const reasoning = getReasoningParams(modelId, localState.settings);
         const report = await generateRadiologyReport({
-          ...buildReportRequest(radiologyInputs),
+          ...buildReportRequest(radiologyInputs, radiologyInstructions),
           model: modelId,
           reasoning,
         });

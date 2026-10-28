@@ -6,7 +6,8 @@
 from __future__ import annotations
 
 from report_parser import FOOTER, parse, render, sentence_spans
-from router import apply, numbered, schema, targets
+from router import (INSTRUCTIONS_RULE, SYSTEM_PROMPT, USER_TEMPLATE, apply, numbered, routing_prompts,
+                    schema, targets)
 
 REPORT = """\
 CT Thorax/Abdomen
@@ -112,6 +113,39 @@ def test_section_emptied_keeps_its_heading() -> None:
     report, _ = routed(REPORT, [{"section": "Befund > Lymphknoten", "replaces": ["S1", "S2"],
                                  "text": "Lunge frei."}])
     assert "\nLunge:\nLymphknoten:" in report
+
+
+def test_edit_with_empty_text_only_takes_out() -> None:
+    report, _ = routed(REPORT, [{"section": "Befund > Lunge", "replaces": ["S2"], "text": ""}])
+    assert "Lunge: Kein Rundherd.\nLymphknoten:" in report
+    report, _ = routed(REPORT, [{"section": "Befund > Lunge", "replaces": [], "text": " "}])
+    assert "Lunge: Kein Rundherd. Kein Pleuraerguss.\n" in report
+
+
+def test_prompts_without_instructions_are_unchanged() -> None:
+    from app import ASSESSMENT_REQUEST, ASSESSMENT_SYSTEM_PROMPT, assessment_prompts
+
+    listing, _ = numbered(targets(parse(REPORT)))
+    for instructions in ("", "  \n"):
+        assert routing_prompts(listing, "Neu Erguss.", instructions) == (
+            SYSTEM_PROMPT, USER_TEMPLATE.format(sections=listing, delta="Neu Erguss."))
+        system, user = assessment_prompts(REPORT, "Neu Erguss.", instructions)
+        assert system == ASSESSMENT_SYSTEM_PROMPT
+        assert "HINWEISE" not in user and user.endswith("Neu Erguss.\n---\n" + ASSESSMENT_REQUEST)
+
+
+def test_instructions_reach_both_prompts() -> None:
+    from app import ASSESSMENT_REQUEST, ASSESSMENT_SYSTEM_PROMPT, assessment_prompts
+
+    listing, _ = numbered(targets(parse(REPORT)))
+    block = "HINWEISE DES RADIOLOGEN:\n---\nBitte ausformulieren.\n---\n"
+    system, user = routing_prompts(listing, "Neu Erguss.", " Bitte ausformulieren.\n")
+    # one rule after the six of each prompt
+    assert "\n6. " in SYSTEM_PROMPT and system == SYSTEM_PROMPT + INSTRUCTIONS_RULE
+    assert user.endswith("Neu Erguss.\n---\n\n" + block)
+    system, user = assessment_prompts(REPORT, "Neu Erguss.", "Bitte ausformulieren.")
+    assert "\n6. " in ASSESSMENT_SYSTEM_PROMPT and system == ASSESSMENT_SYSTEM_PROMPT + INSTRUCTIONS_RULE
+    assert user.endswith("Neu Erguss.\n---\n\n" + block + ASSESSMENT_REQUEST)
 
 
 def test_new_section_with_existing_name_is_merged() -> None:

@@ -7,11 +7,13 @@
 let controller = new AbortController();
 
 // `reasoning` holds the thinking settings from getReasoningParams, as for a
-// normal chat completion.
+// normal chat completion. `instructions`: what the radiologist typed in the
+// text box for the model, empty if nothing.
 export default async function generateRadiologyReport({
   previous_report,
   dictation,
   assessment,
+  instructions,
   model,
   reasoning,
 }) {
@@ -22,7 +24,7 @@ export default async function generateRadiologyReport({
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ previous_report, dictation, assessment, model, reasoning }),
+        body: JSON.stringify({ previous_report, dictation, assessment, instructions, model, reasoning }),
         signal: controller.signal,
       }
     );
