@@ -447,7 +447,13 @@ export default function SidebarContent({
     >
       {/* Header with close button */}
       <div className="flex items-center justify-between px-3 pt-3 pb-2 gap-2">
-        <AiServicesMenu />
+        {/* Logo with the product name under it; the sidebar is too narrow for it beside the logo */}
+        <div className="flex flex-col">
+          <AiServicesMenu />
+          <span className="-mt-1 pl-3 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 whitespace-nowrap">
+            {t("branding.name_suffix")}
+          </span>
+        </div>
         <ShortcutTooltip
           label={t("sidebar.close_sidebar")}
           position="left"

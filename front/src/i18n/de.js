@@ -1,4 +1,9 @@
 export default {
+  // Product name: the "Chat AI" logo is followed by this line of text.
+  // Kept in English, like "Chat AI" itself, so the name is the same in both languages.
+  branding: {
+    name_suffix: "for Radiologists",
+  },
   // Common phrases
   common: {
     loading: "Lädt...",
@@ -440,7 +445,7 @@ export default {
   },
   // Tour
   tour: {
-    welcome_message: "Willkommen bei Chat AI",
+    welcome_message: "Willkommen bei Chat AI for Radiologists",
     start_tour: "Tour starten",
     skip_tour: "Tour überspringen",
     description:
@@ -547,7 +552,7 @@ export default {
   // Landing page
   landing: {
     title: "Sie sind nicht angemeldet",
-    description: "Bitte melden Sie sich an, um Chat AI zu verwenden.",
+    description: "Bitte melden Sie sich an, um Chat AI for Radiologists zu verwenden.",
     reasonsTitle: "Sie können sich anmelden, wenn Sie:",
     reasons: {
       deleted:

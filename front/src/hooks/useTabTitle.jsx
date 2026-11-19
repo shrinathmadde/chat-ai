@@ -4,6 +4,9 @@ import { useSelector } from "react-redux";
 import { useConversationList } from "../db";
 import { selectLastConversation } from "../Redux/reducers/lastConversationSlice";
 
+// Also the title in index.html, shown until this hook runs.
+const APP_NAME = "Chat AI for Radiologists";
+
 export const useTabTitle = () => {
   const currentConversationId = useSelector(selectLastConversation);
   const conversations = useConversationList();
@@ -19,9 +22,9 @@ export const useTabTitle = () => {
         // chats created before it changed.
         const untitled =
           title === "Untitled Chat" || title === "Untitled Conversation";
-        document.title = untitled ? "Chat AI" : title + " - Chat AI";
+        document.title = untitled ? APP_NAME : title + " - " + APP_NAME;
       } else {
-        document.title = "Chat AI";
+        document.title = APP_NAME;
       }
     }, [currentConversationId, conversations]
   );

@@ -64,7 +64,7 @@ export async function downloadReportPdf(text, { title, fileName, pageLabel }) {
   doc.addFont(FONT_FILE, FONT, "normal");
   doc.setFont(FONT, "normal");
   // Nothing from the report in the metadata
-  doc.setProperties({ title, creator: "Chat AI" });
+  doc.setProperties({ title, creator: "Chat AI for Radiologists" });
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();

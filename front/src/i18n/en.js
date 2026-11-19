@@ -1,4 +1,8 @@
 export default {
+  // Product name: the "Chat AI" logo is followed by this line of text
+  branding: {
+    name_suffix: "for Radiologists",
+  },
   // Common phrases
   common: {
     loading: "Loading...",
@@ -438,7 +442,7 @@ export default {
   },
   // Tour
   tour: {
-    welcome_message: "Welcome to Chat AI",
+    welcome_message: "Welcome to Chat AI for Radiologists",
     start_tour: "Start Tour",
     skip_tour: "Skip tour",
     description:
@@ -543,7 +547,7 @@ export default {
   // Landing page
   landing: {
     title: "You are not logged in",
-    description: "Please login to use Chat AI.",
+    description: "Please login to use Chat AI for Radiologists.",
     reasonsTitle: "You can login if you are:",
     reasons: {
       deleted: "• member of a German university or research institution",
