@@ -1,5 +1,16 @@
 import getModelDefaults from "./getModelDefaults";
 
+// The thinking setting a conversation starts with, as an index into reasoning_options.
+// With the radiology module every model starts with thinking off: in the report test
+// (parser_approach/thinking_test.py in umg-radiology-report-formatter) thinking made
+// reports 15–40× slower and often failed, without making them clearly better.
+// Otherwise the model's capability file decides. A choice in the settings panel
+// overrides either default.
+export function defaultReasoningEffort(modelDefaults) {
+  if (import.meta.env.VITE_MODULE_RADIOLOGY === "true") return 0;
+  return modelDefaults?.reasoning_effort;
+}
+
 // Reasoning ("thinking") request parameters for a model, from its capability
 // file and the conversation's reasoning setting. Returns the fields to add to
 // the request: reasoning_effort and/or chat_template_kwargs, or none. Shared by
@@ -10,7 +21,7 @@ export default function getReasoningParams(model, settings) {
   const modelDefaults = getModelDefaults(model);
   try {
     if (modelDefaults?.reasoning_effort !== undefined && modelDefaults?.reasoning_effort !== null) {
-      let reasoning_effort = modelDefaults.reasoning_effort;
+      let reasoning_effort = defaultReasoningEffort(modelDefaults);
       if (settings?.reasoning_effort !== undefined && settings?.reasoning_effort !== null) {
         reasoning_effort = Math.min(settings.reasoning_effort, modelDefaults.reasoning_options.length - 1)
       }

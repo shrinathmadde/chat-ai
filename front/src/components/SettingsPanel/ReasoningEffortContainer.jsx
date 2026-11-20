@@ -4,6 +4,7 @@ import { CircleHelp } from "lucide-react";
 import { useModal } from "../../modals/ModalContext";
 import { useDispatch, useSelector } from "react-redux";
 import getModelDefaults from "../../config/getModelDefaults";
+import { defaultReasoningEffort } from "../../config/getReasoningParams";
 
 const ReasoningEffortContainer = ({ localState, setLocalState }) => {
   const dispatch = useDispatch();
@@ -12,7 +13,7 @@ const ReasoningEffortContainer = ({ localState, setLocalState }) => {
   const settings = localState?.settings || {};
   const modelDefaults = getModelDefaults(settings?.model?.id);
   const showReasoningEffort = modelDefaults?.reasoning_effort !== undefined && modelDefaults?.reasoning_effort !== null ? true : false;
-  const reasoningEffortIndex = settings?.reasoning_effort !== undefined && settings?.reasoning_effort !== null ? settings.reasoning_effort : modelDefaults?.reasoning_effort || 0;
+  const reasoningEffortIndex = settings?.reasoning_effort !== undefined && settings?.reasoning_effort !== null ? settings.reasoning_effort : defaultReasoningEffort(modelDefaults) || 0;
   const reasoningEffortOptions = modelDefaults?.reasoning_options || ["none"];
 
   // Simple setter for per-tool flags

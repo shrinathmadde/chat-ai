@@ -8,6 +8,7 @@ import LanguageSelector from "./LanguageSelector";
 import { Link } from "react-router";
 import { Trans } from "react-i18next";
 import ThemeToggle from "../Header/ThemeToggle";
+import { GUIDE_URL } from "../../config/guide";
 
 export default function CollapsibleFooter({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
@@ -64,17 +65,13 @@ export default function CollapsibleFooter({ className }: { className?: string })
               <Trans i18nKey="footer.terms" />
             </p>
           </Link>
-          {/* Documentation */}
-          <Link
-            to={
-              "https://docs.hpc.gwdg.de/services/ai-services/chat-ai/index.html"
-            }
-            target="_blank"
-          >
+          {/* User guide (German PDF). A plain link: it is a file in public/,
+              not a page of the app, which a router Link would try to open */}
+          <a href={GUIDE_URL} target="_blank" rel="noopener noreferrer">
             <p className="text-center h-full text-blue-600 dark:text-blue-400 hover:underline">
-              <Trans i18nKey="footer.docs" />
+              <Trans i18nKey="footer.guide" />
             </p>
-          </Link>
+          </a>
         </div>
 
         {/* Right section */}

@@ -63,6 +63,7 @@ front/src/
   config/         getModelDefaults.jsx + models/<model-id>.json capability files
   i18n/           en.js, de.js
   utils/          sendMessage, conversationUtils, attachments, appContext, tabChangeSync
+front/guide/      make-guide.mjs — builds the German user guide front/public/anleitung.pdf
 back/service.mjs  POST /documents, GET /models, GET /user, POST /audio/speech,
                   POST /audio/transcriptions, POST /chat/completions, POST /radiology/report,
                   POST /radiology/feedback, DELETE /radiology/feedback/:id
@@ -135,6 +136,12 @@ exercise the change in a browser. A passing build is not evidence that behaviour
 `parser/` has model-free checks: `cd parser && python test_pipeline.py && python test_feedback.py`
 (plain asserts, no pytest). `httpx` is not installed, so FastAPI's `TestClient` can't be used;
 `test_feedback.py` calls the route functions directly.
+
+The user guide `front/public/anleitung.pdf` (linked from the footer and the welcome dialog through
+`config/guide.js`) is generated: with front, back and parser running, `cd front && node
+guide/make-guide.mjs`. It drives headless Chrome through the app with a made-up report (one model
+call) and finds buttons by their German labels, so after changing the radiology screens or their
+`de.js` strings, rerun it and look at the PDF. The guide's text is `PAGES` in that script.
 
 `npm i` can rewrite `package-lock.json`. Check `git status` afterwards and keep unrelated lockfile
 churn out of your commit.
@@ -300,7 +307,9 @@ Verified in `back/service.mjs`:
   `parser` uses `apiKey` from `back.json` and refuses requests when it is empty: the per-user
   `inference-id` fallback does not reach it. The thinking setting travels as `reasoning`, built by
   `config/getReasoningParams.jsx` exactly as for chat completions; without it the model uses its own
-  default (thinking on for Qwen), which made reports 30–50× slower.
+  default (thinking on for Qwen), which made reports 30–50× slower. With `modules.radiology`
+  every model starts with thinking off (`defaultReasoningEffort` in that file, also used by the
+  settings panel); the `reasoning_effort` in `config/models/*.json` applies only without the module.
 - **`/radiology/feedback` stores patient data, so it has two switches.** `back` forwards it to
   `parser`, which returns 503 while `radiologyFeedbackPath` in `back.json` is empty. The button is
   shown only with `modules.radiologyFeedback` in `front.json`. A relative path resolves against

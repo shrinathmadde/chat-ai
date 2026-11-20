@@ -210,6 +210,7 @@ export default {
     imprint: "Imprint",
     terms: "Terms of Use",
     docs: "Docs",
+    guide: "How to use",
     privacy: "Privacy",
     faq: "FAQ",
     contact: "Contact Us",
@@ -445,6 +446,7 @@ export default {
     welcome_message: "Welcome to Chat AI for Radiologists",
     start_tour: "Start Tour",
     skip_tour: "Skip tour",
+    guide_link: "Open the step-by-step guide (PDF, in German)",
     description:
       "Click the button below to begin the guided tour and explore the new user interface.",
     prompt:
