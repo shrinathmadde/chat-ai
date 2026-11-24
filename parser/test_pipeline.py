@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from rebase import (looks_unparsed, rebase, rebase_comparison_date, strip_image_references,
+                    strip_markdown)
 from report_parser import FOOTER, parse, render, sentence_spans
 from router import (INSTRUCTIONS_RULE, SYSTEM_PROMPT, USER_TEMPLATE, apply, numbered, routing_prompts,
                     schema, targets)
@@ -77,6 +79,87 @@ def test_new_assessment_goes_before_the_footer() -> None:
 def test_report_without_headings_is_one_section() -> None:
     assert [s.id for s in targets(parse("Lunge frei. Kein Erguss."))] == ["(Kopfzeile)"]
     assert targets(parse("Beurteilung:\nKein Tumornachweis.")) == []
+
+
+def test_technique_is_routable_but_the_header_is_not() -> None:
+    # A radiologist dictates the technique too, so it needs an address of its own; the
+    # header has none, because nobody dictates the exam title.
+    report = "CT Thorax\n\nTechnik: 128-Zeilen CT. Gesamt-DLP 885 mGy*cm.\n\n" + REPORT.split("\n\n", 1)[1]
+    ids = [s.id for s in targets(parse(report))]
+    assert "Technik" in ids
+    assert "(Kopfzeile)" not in ids
+    assert all("Beurteilung" not in i for i in ids)
+
+
+# --- rebase: statements about the previous examination itself ---------------
+
+
+def test_markdown_report_is_parsed_like_a_plain_one() -> None:
+    plain = parse(REPORT)
+    decorated = parse(rebase(
+        "# CT Thorax/Abdomen\n\n## Befund\n\n"
+        "**Lunge:** Kein Rundherd. Kein Pleuraerguss.\n"
+        "**Lymphknoten:** Keine vergrößerten Lymphknoten. Keine Nekrosen.\n"
+        "**Leber:** Metastase in Segment 7. Größenkonstant zur VU.\n\n"
+        "## Beurteilung\n\n1. Kein Tumornachweis."
+    ))
+    assert [s.id for s in decorated] == [s.id for s in plain]
+    # Without this the whole report is one section and a single "sentence" spans
+    # several findings sections, so naming one deletes all of them.
+    assert not looks_unparsed(decorated)
+    assert len(sentence_spans(decorated[-1].text)) == 1
+
+
+def test_guard_separates_an_unparsed_report_from_a_short_one() -> None:
+    # A dictation-style report without headings is one section on purpose, and routable
+    assert not looks_unparsed(parse("Lunge frei. Kein Erguss."))
+    # But one section holding several paragraphs means the headings were not recognised
+    assert looks_unparsed(parse("Bericht\n\nLunge frei.\n\nKein Erguss."))
+
+
+def test_markdown_keeps_a_single_asterisk() -> None:
+    # "Gesamt-DLP von 885 mGy*cm." is content, not emphasis
+    line = "Technik: Gesamt-DLP von 885 mGy*cm. Zweite Messung 900 mGy*cm."
+    assert strip_markdown(line) == line
+    assert strip_markdown("**Abdomen:** frei") == "Abdomen: frei"
+    assert strip_markdown("## Befund") == "Befund"
+
+
+def test_image_references_go_but_measurements_stay() -> None:
+    assert strip_image_references("Konkrement (Serie 2/Bild 59).") == "Konkrement."
+    assert strip_image_references("Nebenmilz (Serie 2/Bild 48), unauffällig.") == "Nebenmilz, unauffällig."
+    # The parentheses often hold the radiologist's measurement as well
+    assert strip_image_references("LK (SAD 1,2 cm, Serie 5, Ima 88).") == "LK (SAD 1,2 cm)."
+    assert strip_image_references("Herd (aktuell 4 mm, Serie 6, Image 133, VU 7 mm).") == \
+        "Herd (aktuell 4 mm, VU 7 mm)."
+    # A parenthesis the radiologist never closed, seen in the real reports
+    assert strip_image_references("Unterlappen (Serie 12/Image 311 sowie links.") == \
+        "Unterlappen sowie links."
+    # Parentheses without a reference are left exactly as they are
+    assert strip_image_references("Zyste (BOSNIAK I).") == "Zyste (BOSNIAK I)."
+
+
+def test_comparison_date_becomes_the_previous_exam_date() -> None:
+    report = ("CT Thorax vom 30.06.2026 15:28\n\nBefund:\n"
+              "Es liegen Voruntersuchungen zum Vergleich vor, zuletzt vom 07.05.2026.\n"
+              "Lunge: Kein Rundherd.")
+    assert "zuletzt vom 30.06.2026." in rebase_comparison_date(report)
+    # Ambiguous or absent dates are left alone: a wrong date is worse than a stale one
+    assert rebase_comparison_date(report.replace("vom 30.06.2026 15:28", "")) == \
+        report.replace("vom 30.06.2026 15:28", "")
+    two = report.replace("Befund:", "Befund:\nVoruntersuchung vom 01.01.2026.")
+    assert rebase_comparison_date(two) == two
+    # A date in parentheses dates a measurement, not the report's comparison basis:
+    # "(VU vom 07.05.2026 ca. 2 mm)" says what this lesion measured in *that* exam, so
+    # moving the date would attribute the old measurement to the wrong examination.
+    annotated = ("CT Thorax vom 30.06.2026\n\nBefund:\n"
+                 "Lunge: Nodulus 4 mm (VU vom 07.05.2026 ca. 2 mm). Kein Erguss.")
+    assert rebase_comparison_date(annotated) == annotated
+
+
+def test_rebase_does_not_disturb_a_plain_report() -> None:
+    assert rebase(REPORT.replace(" (Serie 3, Ima 45)", "")) == REPORT.replace(" (Serie 3, Ima 45)", "")
+    assert render(parse(rebase(REPORT))) == rebase(REPORT)  # still lossless
 
 
 def test_schema_never_has_an_empty_enum() -> None:

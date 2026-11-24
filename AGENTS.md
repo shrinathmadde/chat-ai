@@ -29,7 +29,31 @@ Three services, no monorepo tooling — each has its own dependency file and is 
   `router.targets()` must never offer the Beurteilung to the model: `apply()` overwrites it with
   the assessment at the end, so anything routed there would silently vanish. Nor the
   `(Fußzeile)` section that `parse()` starts at a greeting or signature: without it the
-  signature counted as assessment and was overwritten.
+  signature counted as assessment and was overwritten. Nor the `(Kopfzeile)`, which nobody
+  dictates. It *does* offer the other main parts, `Technik` above all: radiologists dictate the
+  technique too, and while the findings were the only addresses the `strict` enum in `schema()`
+  allowed, such a sentence had nowhere legal to go and the model silently dropped it.
+  `rebase.py` runs on the previous report **before** `parse()` — never inside it, which must stay
+  lossless — and deterministically fixes the sentences that describe the *previous examination*
+  rather than the patient. The router cannot: the dictation does not contradict them, so by its
+  own rules it leaves them alone, and two of the three are in parts it never sees.
+  Series/image references (`(Serie 2/Bild 59)`) point into the previous exam's image stack; across
+  the 15 real pairs in `report_pairs.csv` radiologists re-cited 20 of 21 with the new exam's
+  numbers and carried one over, and 13 arrive in the dictation, so an inherited one is dropped and
+  dictated ones are kept. Only the reference goes, not its parentheses: they often also hold a
+  measurement (`(SAD 1,2 cm, Serie 5, Ima 88)`). The comparison date (`zuletzt vom …`) names what
+  the *previous* report compared against, so the previous report's own date, read from the header
+  section, takes its place — only when both are unambiguous, since a confidently wrong date is
+  worse than a stale one the radiologist can see. Markdown decorations (`## Befund`,
+  `**Abdomen:**`) are stripped because they hide headings from `TOP_LEVEL` and sentence ends from
+  `SENTENCE_END`; strip only paired `**…**`, never a single `*`, which is content in
+  `Gesamt-DLP von 885 mGy*cm`. The eval corpus is pseudonymised and has no comparison dates, so it
+  cannot test that part — only live feedback can.
+  `rebase.looks_unparsed()` guards `/report`: a *single* section holding several paragraphs means
+  the headings were not recognised, so sentence numbering runs across section boundaries and one
+  named sentence can delete whole findings sections. This happened — a report pasted as markdown
+  lost its entire `Skelett` section and the radiologist signed it off unnoticed. A short
+  headingless report is one section on purpose and stays allowed.
   The model never retypes the report: its sentences are numbered (`S1`, `S2`, … across all
   sections, `sentence_spans()`), the model names the ones the dictation makes untrue under a
   schema enum, and `apply()` takes those whole sentences out, all edits of a section in one pass.
@@ -67,6 +91,7 @@ front/guide/      make-guide.mjs — builds the German user guide front/public/a
 back/service.mjs  POST /documents, GET /models, GET /user, POST /audio/speech,
                   POST /audio/transcriptions, POST /chat/completions, POST /radiology/report,
                   POST /radiology/feedback, DELETE /radiology/feedback/:id
+parser/rebase.py  deterministic fixes to the previous report, before parse() (see §1)
 parser/app.py     POST /report (radiology report pipeline, 127.0.0.1:8082),
                   POST /feedback, DELETE /feedback/{id} (shared reports, feedback_store.py)
 secrets/          front.json + back.json (gitignored; *.sample committed)

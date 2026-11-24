@@ -33,7 +33,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from chat_ai import ChatAI, ChatAIError
-from report_parser import FOOTER, Section, is_findings, parse, render, sentence_spans
+from report_parser import FOOTER, HEADER, Section, is_findings, parse, render, sentence_spans
 
 DATASET = Path("data/derived/report_pairs.csv")
 OUT_ROOT = Path("data/parser_approach/generated")
@@ -105,15 +105,21 @@ def routing_prompts(listing: str, delta: str, instructions: str = "") -> tuple[s
 
 
 def targets(sections: list[Section]) -> list[Section]:
-    """Sections the dictation may be routed into: everything under the findings part.
+    """Sections the dictation may be routed into: the findings part and the other main
+    parts of the report, in document order.
 
-    Never the assessment, not even in a report without a findings heading: apply() replaces
-    it at the end, so a dictated sentence routed there would vanish from the report. Never the
-    footer either. A report without any heading is one section, the header.
+    Radiologists dictate the technique too ("Technik 128 Zeilen CT nativ, 958 DLP"), so
+    restricting this to the findings left such a sentence with no address it was allowed to
+    name — the enum in schema() is strict — and the model dropped it. Never the header,
+    which the radiologist does not dictate. Never the assessment, not even in a report
+    without a findings heading: apply() replaces it at the end, so a dictated sentence
+    routed there would vanish from the report. Never the footer either. A report without
+    any heading is one section, the header.
     """
     body = [s for s in sections if s.path[0].lower() != "beurteilung" and s.path[0] != FOOTER]
-    found = [s for s in body if is_findings(s.path[0])]
-    return found or [s for s in body if s.path[0] != sections[0].path[0]] or body
+    if any(is_findings(s.path[0]) for s in body):
+        return [s for s in body if s.path[0] != HEADER]
+    return [s for s in body if s.path[0] != sections[0].path[0]] or body
 
 
 def numbered(routable: list[Section]) -> tuple[str, dict[str, tuple[str, int, int]]]:

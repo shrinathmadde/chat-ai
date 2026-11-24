@@ -48,6 +48,7 @@ from pydantic import BaseModel, Field
 
 import feedback_store
 from chat_ai import ChatAI, ChatAIError, Completion
+from rebase import looks_unparsed, rebase
 from report_parser import parse
 from router import INSTRUCTIONS_RULE, INSTRUCTIONS_TEMPLATE, run_case, targets
 
@@ -217,13 +218,23 @@ def report(request: ReportRequest) -> dict:
         raise HTTPException(422, f"Missing input: {', '.join(missing)}")
     if not API_KEY:
         raise HTTPException(503, "The report pipeline has no API key (apiKey in back.json).")
-    if not targets(parse(request.previous_report)):
+
+    # Everything downstream works on the re-based report: the statements that described the
+    # previous examination itself are corrected here, before its sentences are numbered.
+    previous = rebase(request.previous_report)
+    sections = parse(previous)
+    if not targets(sections):
         raise HTTPException(422, "The previous report has no findings to update, only an assessment.")
+    if looks_unparsed(sections):
+        # Numbering would run across section boundaries, so one named sentence could take a
+        # whole findings section out of the report. Refuse rather than risk it silently.
+        raise HTTPException(422, "The previous report's headings were not recognised, so it "
+                                 "cannot be updated safely. Please check its formatting.")
 
     generate = not request.assessment.strip()
     row = {
         "case_id": "chat-ai",
-        "pre_report": request.previous_report,
+        "pre_report": previous,
         "delta_report": request.dictation,
         "delta_assessment": ASSESSMENT_SLOT if generate else request.assessment,
         "instructions": request.instructions,
@@ -244,7 +255,7 @@ def report(request: ReportRequest) -> dict:
         try:
             routed = pool.submit(run_case, client(), request.model, row, MAX_TOKENS)
             written = (
-                pool.submit(write_assessment, client(), request.model, request.previous_report,
+                pool.submit(write_assessment, client(), request.model, previous,
                             request.dictation, request.instructions)
                 if generate else None
             )
